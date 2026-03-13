@@ -1,0 +1,547 @@
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { motion } from 'framer-motion'
+import {
+  ArrowLeftIcon, BriefcaseIcon, CalendarIcon, CurrencyEuroIcon,
+  DocumentTextIcon, PencilIcon, XMarkIcon, CheckIcon,
+  ClockIcon, UserCircleIcon, PlusIcon,
+  EnvelopeIcon, PhoneIcon, ChatBubbleLeftIcon, VideoCameraIcon, PencilSquareIcon,
+} from '@heroicons/react/24/outline'
+import { format } from 'date-fns'
+import { dealsApi } from '../api/deals'
+import { quotesApi } from '../api/quotes'
+import { activitiesApi } from '../api/activities'
+import ActivityFeed from '../components/ActivityFeed'
+import QuoteBuilder from '../components/QuoteBuilder'
+import AttachmentGallery from '../components/AttachmentGallery'
+import clsx from 'clsx'
+import toast from 'react-hot-toast'
+
+const ALL_STAGES = [
+  'lead_received', 'lead_qualification', 'account_created', 'needs_assessment',
+  'feasibility_check', 'quote_preparation', 'quote_sent', 'negotiation',
+  'order_confirmed', 'order_created_erp', 'artwork_approval', 'production_planning',
+  'in_production', 'quality_check', 'shipped', 'invoice_created',
+  'payment_received', 'deal_closed_won', 'lost', 'on_hold',
+]
+
+const STAGE_COLORS = {
+  deal_closed_won: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  lost: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  on_hold: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+}
+
+const ACTIVITY_TYPES = ['call', 'email', 'note', 'whatsapp', 'meeting']
+const TYPE_ICONS = {
+  email: EnvelopeIcon, call: PhoneIcon, meeting: VideoCameraIcon,
+  note: PencilSquareIcon, whatsapp: ChatBubbleLeftIcon,
+}
+const TYPE_COLORS_BG = {
+  email: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20',
+  call: 'text-green-500 bg-green-50 dark:bg-green-900/20',
+  meeting: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20',
+  note: 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20',
+  whatsapp: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20',
+}
+
+export default function DealDetail() {
+  const { id } = useParams()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [deal, setDeal] = useState(null)
+  const [quotes, setQuotes] = useState([])
+  const [activities, setActivities] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [editData, setEditData] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [selectedActivity, setSelectedActivity] = useState(null)
+  const [showLogForm, setShowLogForm] = useState(false)
+  const [showQuoteBuilder, setShowQuoteBuilder] = useState(false)
+  const [logData, setLogData] = useState({ type: 'call', subject: '', body: '' })
+  const [loggingActivity, setLoggingActivity] = useState(false)
+
+  const loadActivities = () =>
+    activitiesApi.list({ related_to_type: 'deal', related_to_id: Number(id), limit: 100 })
+      .then(setActivities).catch(() => {})
+
+  const load = () =>
+    Promise.all([
+      dealsApi.get(id),
+      quotesApi.list({ deal_id: id }),
+    ])
+      .then(([d, q]) => { setDeal(d); setQuotes(q) })
+      .finally(() => setLoading(false))
+
+  useEffect(() => {
+    load()
+    loadActivities()
+  }, [id])
+
+  const openEdit = () => {
+    setEditData({
+      title: deal.title,
+      type: deal.type,
+      stage: deal.stage,
+      value_eur: deal.value_eur ?? '',
+      probability: deal.probability ?? 0,
+      expected_close_date: deal.expected_close_date ?? '',
+      product_type: deal.product_type ?? '',
+      quantity: deal.quantity ?? '',
+      branding_requirements: deal.branding_requirements ?? '',
+      shipping_location: deal.shipping_location ?? '',
+      feasibility_checked: deal.feasibility_checked,
+      artwork_approved: deal.artwork_approved,
+      payment_received: deal.payment_received,
+      jira_ticket_id: deal.jira_ticket_id ?? '',
+    })
+    setEditing(true)
+  }
+
+  const saveEdit = async () => {
+    setSaving(true)
+    try {
+      if (editData.stage !== deal.stage) {
+        await dealsApi.changeStage(id, { stage: editData.stage })
+      }
+      const { stage, ...rest } = editData
+      await dealsApi.update(id, {
+        ...rest,
+        value_eur: rest.value_eur !== '' ? Number(rest.value_eur) : null,
+        probability: Number(rest.probability),
+        quantity: rest.quantity !== '' ? Number(rest.quantity) : null,
+        expected_close_date: rest.expected_close_date || null,
+      })
+      toast.success('Deal updated')
+      setEditing(false)
+      load()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error saving deal')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const set = (k, v) => setEditData(d => ({ ...d, [k]: v }))
+
+  const logActivity = async () => {
+    if (!logData.subject.trim()) return
+    setLoggingActivity(true)
+    try {
+      await activitiesApi.create({
+        ...logData,
+        related_to_type: 'deal',
+        related_to_id: Number(id),
+      })
+      toast.success('Activity logged')
+      setShowLogForm(false)
+      setLogData({ type: 'call', subject: '', body: '' })
+      loadActivities()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error')
+    } finally {
+      setLoggingActivity(false)
+    }
+  }
+
+  const handleDownloadPDF = async (quoteId) => {
+    const url = `/api/v1/quotes/${quoteId}/pdf`
+    const token = localStorage.getItem('crm_token')
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+    if (!res.ok) { toast.error('PDF generation failed'); return }
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `quote_${quoteId}.pdf`
+    a.click()
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full" />
+    </div>
+  )
+
+  if (!deal) return <div className="text-gray-500">Deal not found</div>
+
+  const stageColor = STAGE_COLORS[deal.stage] || 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+
+  return (
+    <div className="max-w-5xl space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <button onClick={() => navigate('/deals')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+          <ArrowLeftIcon className="w-5 h-5 text-gray-500" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{deal.title}</h1>
+          <div className="flex items-center gap-3 mt-1">
+            <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', stageColor)}>
+              {t(`deals.stages.${deal.stage}`, deal.stage)}
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400 capitalize">{deal.type}</span>
+          </div>
+        </div>
+        <button onClick={openEdit} className="btn-secondary flex items-center gap-2 text-sm">
+          <PencilIcon className="w-4 h-4" /> Edit
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6">
+        <div className="col-span-2 space-y-4">
+          {/* Key metrics */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { icon: CurrencyEuroIcon, label: t('deals.value'), value: deal.value_eur ? `€ ${Number(deal.value_eur).toLocaleString()}` : '—', color: 'brand' },
+              { icon: BriefcaseIcon, label: t('deals.probability'), value: `${deal.probability}%`, color: 'blue' },
+              { icon: CalendarIcon, label: t('deals.closeDate'), value: deal.expected_close_date || '—', color: 'purple' },
+            ].map(({ icon: Icon, label, value, color }, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+              >
+                <div className={`w-8 h-8 rounded-lg bg-${color}-100 dark:bg-${color}-900/30 flex items-center justify-center mb-2`}>
+                  <Icon className={`w-4 h-4 text-${color}-600 dark:text-${color}-400`} />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white mt-0.5">{value}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Deal fields */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Details</h2>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {[
+                ['Product Type', deal.product_type],
+                ['Quantity', deal.quantity],
+                ['Branding', deal.branding_requirements],
+                ['Shipping To', deal.shipping_location],
+                ['Order Ref', deal.order_reference],
+                ['Invoice Ref', deal.invoice_reference],
+                ['Jira', deal.jira_ticket_id],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k}>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{k}</p>
+                  <p className="text-gray-800 dark:text-gray-200">{String(v)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+              {[
+                ['Feasibility', deal.feasibility_checked],
+                ['Artwork Approved', deal.artwork_approved],
+                ['Payment Received', deal.payment_received],
+              ].map(([label, val]) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <div className={clsx('w-2 h-2 rounded-full', val ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600')} />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quotes */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-1.5">
+                <DocumentTextIcon className="w-4 h-4" />{t('quotes.title')}
+                {quotes.length > 0 && <span className="text-xs font-normal text-gray-400 normal-case">({quotes.length})</span>}
+              </h2>
+              <button
+                onClick={() => setShowQuoteBuilder(true)}
+                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <PlusIcon className="w-3.5 h-3.5" /> New quote
+              </button>
+            </div>
+            {quotes.length > 0 ? (
+              <div className="space-y-2">
+                {quotes.map(q => (
+                  <div key={q.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div>
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Quote #{q.id} v{q.version}</span>
+                      <span className={clsx('ml-2 text-xs px-1.5 py-0.5 rounded',
+                        q.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                        q.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-blue-100 text-blue-700'
+                      )}>{q.status}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        € {Number(q.total_value).toLocaleString()}
+                      </span>
+                      <button onClick={() => handleDownloadPDF(q.id)} className="text-xs text-brand-600 hover:underline">PDF</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No quotes yet.</p>
+            )}
+          </div>
+
+          {/* Contact History */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-1.5">
+                <ClockIcon className="w-4 h-4" /> Contact History
+                {activities.length > 0 && (
+                  <span className="ml-1 text-xs font-normal text-gray-400 normal-case">({activities.length})</span>
+                )}
+              </h2>
+              <button
+                onClick={() => setShowLogForm(true)}
+                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <PlusIcon className="w-3.5 h-3.5" /> Log activity
+              </button>
+            </div>
+            <ActivityFeed activities={activities} onSelect={setSelectedActivity} />
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <AttachmentGallery entityType="deal" entityId={Number(id)} />
+          </div>
+        </div>
+      </div>
+
+      {/* Activity Detail Modal */}
+      {selectedActivity && (() => {
+        const Icon = TYPE_ICONS[selectedActivity.type] || PencilSquareIcon
+        const colorClass = TYPE_COLORS_BG[selectedActivity.type] || TYPE_COLORS_BG.note
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={clsx('w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0', colorClass)}>
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 capitalize">{t(`activities.types.${selectedActivity.type}`, selectedActivity.type)}</p>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white leading-snug">{selectedActivity.subject}</h2>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedActivity(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex-shrink-0">
+                  <XMarkIcon className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {selectedActivity.body && (
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2.5">
+                  {selectedActivity.body}
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-700">
+                <span className="flex items-center gap-1">
+                  <ClockIcon className="w-3.5 h-3.5" />
+                  {selectedActivity.created_at && format(new Date(selectedActivity.created_at), 'dd.MM.yyyy HH:mm')}
+                </span>
+                {selectedActivity.assigned_user_name && (
+                  <span className="flex items-center gap-1">
+                    <UserCircleIcon className="w-3.5 h-3.5" />
+                    {selectedActivity.assigned_user_name}
+                  </span>
+                )}
+                {selectedActivity.completed_at && (
+                  <span className="flex items-center gap-1 text-green-600">
+                    <CheckIcon className="w-3.5 h-3.5" />
+                    Done {format(new Date(selectedActivity.completed_at), 'dd.MM.yyyy')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Log Activity Form */}
+      {showLogForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Log Activity</h2>
+              <button onClick={() => setShowLogForm(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Type selector */}
+            <div className="flex gap-2">
+              {ACTIVITY_TYPES.map(type => {
+                const Icon = TYPE_ICONS[type]
+                const colorClass = TYPE_COLORS_BG[type]
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setLogData(d => ({ ...d, type }))}
+                    className={clsx(
+                      'flex-1 flex flex-col items-center gap-1 py-2 rounded-lg border transition-colors text-xs',
+                      logData.type === type
+                        ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                    )}
+                  >
+                    <div className={clsx('w-6 h-6 rounded-full flex items-center justify-center', logData.type === type ? colorClass : 'bg-gray-100 dark:bg-gray-700')}>
+                      <Icon className="w-3 h-3" />
+                    </div>
+                    <span className="capitalize leading-none">{type}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div>
+              <label className="label">Subject *</label>
+              <input
+                className="input-field w-full"
+                placeholder={logData.type === 'call' ? 'e.g. Follow-up call' : logData.type === 'email' ? 'e.g. Sent pricing info' : 'Subject…'}
+                value={logData.subject}
+                onChange={e => setLogData(d => ({ ...d, subject: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="label">Notes</label>
+              <textarea
+                rows={3}
+                className="input-field w-full"
+                placeholder="Details, outcome, next steps…"
+                value={logData.body}
+                onChange={e => setLogData(d => ({ ...d, body: e.target.value }))}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={logActivity}
+                disabled={!logData.subject.trim() || loggingActivity}
+                className="btn-primary flex-1 disabled:opacity-50"
+              >
+                {loggingActivity ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setShowLogForm(false)} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quote Builder Modal */}
+      {showQuoteBuilder && (
+        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-3xl my-8 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">New Quote — {deal.title}</h2>
+              <button onClick={() => setShowQuoteBuilder(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <QuoteBuilder
+              dealId={Number(id)}
+              onCreated={() => {
+                setShowQuoteBuilder(false)
+                load()
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Deal</h2>
+              <button onClick={() => setEditing(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Title</label>
+                <input className="input-field w-full" value={editData.title} onChange={e => set('title', e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Type</label>
+                  <select className="input-field w-full" value={editData.type} onChange={e => set('type', e.target.value)}>
+                    <option value="standard">Standard</option>
+                    <option value="barter">Barter</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Stage</label>
+                  <select className="input-field w-full" value={editData.stage} onChange={e => set('stage', e.target.value)}>
+                    {ALL_STAGES.map(s => <option key={s} value={s}>{t(`deals.stages.${s}`, s)}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Value (EUR)</label>
+                  <input type="number" step="0.01" className="input-field w-full" value={editData.value_eur} onChange={e => set('value_eur', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Probability (%)</label>
+                  <input type="number" min="0" max="100" className="input-field w-full" value={editData.probability} onChange={e => set('probability', e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Product Type</label>
+                  <input className="input-field w-full" value={editData.product_type} onChange={e => set('product_type', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Quantity</label>
+                  <input type="number" className="input-field w-full" value={editData.quantity} onChange={e => set('quantity', e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Expected Close Date</label>
+                <input type="date" className="input-field w-full" value={editData.expected_close_date} onChange={e => set('expected_close_date', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Branding Requirements</label>
+                <input className="input-field w-full" value={editData.branding_requirements} onChange={e => set('branding_requirements', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Shipping Location</label>
+                <input className="input-field w-full" value={editData.shipping_location} onChange={e => set('shipping_location', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Jira Ticket</label>
+                <input className="input-field w-full" value={editData.jira_ticket_id} onChange={e => set('jira_ticket_id', e.target.value)} />
+              </div>
+              <div className="flex flex-wrap gap-4 pt-1">
+                {[
+                  ['feasibility_checked', 'Feasibility Done'],
+                  ['artwork_approved', 'Artwork Approved'],
+                  ['payment_received', 'Payment Received'],
+                ].map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input type="checkbox" className="rounded" checked={!!editData[k]} onChange={e => set(k, e.target.checked)} />
+                    <span className="text-gray-600 dark:text-gray-300">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={saveEdit} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
+                <CheckIcon className="w-4 h-4" /> {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

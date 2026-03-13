@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Alembic
+# (keep versions/ but ignore compiled pycache inside)
+
+# Node / Frontend
+node_modules/
+crm/frontend/node_modules/
+frontend/node_modules/
+dist/
+.vite/
+
+# Uploads (user files, not code)
+backend/uploads/
+!backend/uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+
+# Docker
+*.override.yml

@@ -1,0 +1,318 @@
+{
+  "common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "search": "Suchen",
+    "loading": "Lädt...",
+    "noResults": "Keine Ergebnisse gefunden",
+    "confirm": "Bestätigen",
+    "yes": "Ja",
+    "no": "Nein",
+    "name": "Name",
+    "email": "E-Mail",
+    "phone": "Telefon",
+    "status": "Status",
+    "type": "Typ",
+    "date": "Datum",
+    "actions": "Aktionen",
+    "filter": "Filter",
+    "close": "Schließen",
+    "back": "Zurück",
+    "viewAll": "Alle anzeigen",
+    "total": "Gesamt",
+    "priority": "Priorität",
+    "assigned": "Zugewiesen an",
+    "notes": "Notizen",
+    "required": "Pflichtfeld",
+    "optional": "Optional"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "leads": "Leads",
+    "deals": "Deals",
+    "accounts": "Accounts",
+    "contacts": "Kontakte",
+    "quotes": "Angebote",
+    "reports": "Berichte",
+    "tasks": "Aufgaben",
+    "admin": "Admin",
+    "settings": "Einstellungen",
+    "logout": "Abmelden",
+    "data": "Daten",
+    "export": "Exportieren",
+    "help": "Hilfe"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "loginTitle": "Bei Ihrem Konto anmelden",
+    "emailLabel": "E-Mail-Adresse",
+    "passwordLabel": "Passwort",
+    "loginButton": "Anmelden",
+    "loginError": "Ungültige E-Mail oder Passwort",
+    "loggingIn": "Anmeldung läuft..."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Willkommen zurück",
+    "myDeals": "Meine offenen Deals",
+    "myTasks": "Meine Aufgaben",
+    "myLeads": "Meine Leads",
+    "recentActivity": "Letzte Aktivitäten",
+    "overdue": "Überfällig",
+    "totalPipelineValue": "Pipeline-Wert",
+    "wonThisMonth": "Gewonnen diesen Monat",
+    "openDeals": "Offene Deals",
+    "newLeads": "Neue Leads"
+  },
+  "leads": {
+    "title": "Leads",
+    "new": "Neuer Lead",
+    "source": "Quelle",
+    "sources": {
+      "email": "E-Mail",
+      "website": "Website",
+      "event": "Veranstaltung",
+      "referral": "Empfehlung",
+      "manual": "Manuell"
+    },
+    "statuses": {
+      "new": "Neu",
+      "contacted": "Kontaktiert",
+      "qualified": "Qualifiziert",
+      "converted": "Konvertiert",
+      "lost": "Verloren"
+    },
+    "company": "Unternehmen",
+    "contact": "Kontakt",
+    "qualify": "Qualifizieren",
+    "convert": "In Deal umwandeln",
+    "convertTitle": "Lead in Deal umwandeln",
+    "dealTitle": "Deal-Titel",
+    "createAccount": "Neuen Account erstellen",
+    "accountName": "Account-Name",
+    "estimatedVolume": "Geschätztes Volumen",
+    "timeline": "Zeitplan",
+    "useCase": "Anwendungsfall"
+  },
+  "deals": {
+    "title": "Deals",
+    "new": "Neuer Deal",
+    "pipeline": "Pipeline",
+    "listView": "Listenansicht",
+    "kanban": "Kanban",
+    "stage": "Phase",
+    "stages": {
+      "lead_received": "Lead erhalten",
+      "lead_qualification": "Lead-Qualifizierung",
+      "account_created": "Account erstellt",
+      "needs_assessment": "Bedarfsermittlung",
+      "feasibility_check": "Machbarkeitsprüfung",
+      "quote_preparation": "Angebotserstellung",
+      "quote_sent": "Angebot versendet",
+      "negotiation": "Verhandlung",
+      "order_confirmed": "Auftrag bestätigt",
+      "order_created_erp": "Auftrag im ERP",
+      "artwork_approval": "Artwork-Freigabe",
+      "production_planning": "Produktionsplanung",
+      "in_production": "In Produktion",
+      "quality_check": "Qualitätskontrolle",
+      "shipped": "Versandt",
+      "invoice_created": "Rechnung erstellt",
+      "payment_received": "Zahlung eingegangen",
+      "deal_closed_won": "Deal gewonnen",
+      "lost": "Verloren",
+      "on_hold": "Pausiert"
+    },
+    "types": {
+      "standard": "Standard",
+      "barter": "Tausch",
+      "custom": "Individuell"
+    },
+    "value": "Wert (EUR)",
+    "probability": "Wahrscheinlichkeit (%)",
+    "closeDate": "Voraussichtl. Abschluss",
+    "lostReason": "Verlustgrund",
+    "feasibility": "Machbarkeit",
+    "feasibilityChecked": "Machbarkeit bestätigt",
+    "artworkApproved": "Artwork freigegeben",
+    "orderRef": "Auftragsreferenz",
+    "invoiceRef": "Rechnungsreferenz",
+    "advanceStage": "Phase voranbringen",
+    "markLost": "Als verloren markieren",
+    "markOnHold": "Pausieren"
+  },
+  "accounts": {
+    "title": "Accounts",
+    "new": "Neuer Account",
+    "types": {
+      "B2B": "B2B",
+      "B2B2C": "B2B2C"
+    },
+    "statuses": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "prospect": "Interessent"
+    },
+    "industry": "Branche",
+    "segment": "Segment",
+    "country": "Land",
+    "region": "Region",
+    "website": "Website",
+    "address": "Adresse",
+    "accountManager": "Account Manager",
+    "jiraTicket": "Jira-Ticket-ID",
+    "openDeals": "Offene Deals",
+    "contacts": "Kontakte",
+    "activity": "Aktivität"
+  },
+  "contacts": {
+    "title": "Titel / Rolle",
+    "new": "Neuer Kontakt",
+    "firstName": "Vorname",
+    "lastName": "Nachname",
+    "isPrimary": "Hauptkontakt",
+    "account": "Account"
+  },
+  "quotes": {
+    "title": "Angebote",
+    "new": "Neues Angebot",
+    "version": "Version",
+    "lineItems": "Positionen",
+    "product": "Produkt",
+    "qty": "Menge",
+    "unitPrice": "Stückpreis",
+    "total": "Gesamt",
+    "addLine": "Position hinzufügen",
+    "shipping": "Versandkosten",
+    "production": "Produktionskosten",
+    "grandTotal": "Gesamtbetrag",
+    "paymentTerms": "Zahlungsbedingungen",
+    "validDays": "Gültig für (Tage)",
+    "send": "Angebot versenden",
+    "accept": "Akzeptieren",
+    "reject": "Ablehnen",
+    "downloadPDF": "PDF herunterladen",
+    "statuses": {
+      "draft": "Entwurf",
+      "sent": "Versendet",
+      "negotiating": "In Verhandlung",
+      "accepted": "Angenommen",
+      "rejected": "Abgelehnt"
+    }
+  },
+  "activities": {
+    "title": "Aktivitäten",
+    "new": "Aktivität erfassen",
+    "types": {
+      "email": "E-Mail",
+      "call": "Anruf",
+      "meeting": "Meeting",
+      "note": "Notiz",
+      "task": "Aufgabe",
+      "whatsapp": "WhatsApp"
+    },
+    "subject": "Betreff",
+    "body": "Notizen / Inhalt",
+    "dueDate": "Fälligkeitsdatum",
+    "completed": "Als erledigt markieren",
+    "overdue": "Überfällig"
+  },
+  "tasks": {
+    "title": "Aufgaben",
+    "new": "Neue Aufgabe",
+    "description": "Beschreibung",
+    "dueDate": "Fälligkeitsdatum",
+    "priorities": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch"
+    },
+    "statuses": {
+      "open": "Offen",
+      "completed": "Erledigt"
+    },
+    "markComplete": "Als erledigt markieren",
+    "overdue": "Überfällig"
+  },
+  "reports": {
+    "title": "Berichte",
+    "pipeline": "Pipeline-Übersicht",
+    "leads": "Lead-Analyse",
+    "performance": "Vertriebsleistung",
+    "channels": "Akquisitionskanäle",
+    "accounts": "Account-Übersicht",
+    "wonDeals": "Gewonnene Deals",
+    "lostDeals": "Verlorene Deals",
+    "conversionRate": "Konversionsrate",
+    "totalValue": "Gesamtwert (EUR)"
+  },
+  "admin": {
+    "title": "Admin",
+    "users": "Benutzerverwaltung",
+    "workflows": "Workflow-Regeln",
+    "newUser": "Neuer Benutzer",
+    "role": "Rolle",
+    "roles": {
+      "sales_rep": "Vertriebsmitarbeiter",
+      "account_manager": "Account Manager",
+      "sales_manager": "Vertriebsleiter",
+      "admin": "Administrator"
+    },
+    "isActive": "Aktiv",
+    "password": "Passwort"
+  },
+  "msGraph": {
+    "title": "Microsoft 365 Verbindung",
+    "connect": "Outlook verbinden",
+    "disconnect": "Trennen",
+    "connected": "Verbunden",
+    "notConnected": "Nicht verbunden",
+    "description": "Verbinden Sie Ihr Microsoft 365 Konto, um Outlook-E-Mails und Kalender mit CRM-Datensätzen zu synchronisieren."
+  },
+  "theme": {
+    "dark": "Dunkelmodus",
+    "light": "Hellmodus"
+  },
+  "language": {
+    "en": "English",
+    "de": "Deutsch"
+  },
+  "settings": {
+    "title": "Systemeinstellungen",
+    "pipeline": "Pipeline-Phasen",
+    "customFields": "Benutzerdefinierte Felder",
+    "addStage": "Phase hinzufügen",
+    "addField": "Feld hinzufügen",
+    "stageKey": "Phasen-Schlüssel",
+    "labelEN": "Bezeichnung (EN)",
+    "labelDE": "Bezeichnung (DE)",
+    "marksWon": "Als gewonnen markieren",
+    "marksLost": "Als verloren markieren",
+    "appliesTo": "Gilt für",
+    "fieldType": "Feldtyp",
+    "required": "Pflichtfeld"
+  },
+  "import": {
+    "title": "Salesforce-Import",
+    "subtitle": "Importiere bestehende Daten aus Salesforce CSV- oder XLSX-Exporten",
+    "chooseType": "Objekttyp wählen",
+    "uploadFile": "Datei hochladen",
+    "results": "Ergebnisse",
+    "startImport": "Import starten",
+    "importing": "Importiere...",
+    "totalRows": "Gesamtzeilen",
+    "imported": "Importiert",
+    "skipped": "Übersprungen",
+    "complete": "Import abgeschlossen"
+  },
+  "attachments": {
+    "title": "Anhänge",
+    "upload": "Hochladen",
+    "dropHere": "Dateien hierher ziehen oder klicken",
+    "noAttachments": "Noch keine Anhänge",
+    "delete": "Anhang löschen"
+  }
+}

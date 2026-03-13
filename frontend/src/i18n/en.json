@@ -1,0 +1,318 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "loading": "Loading...",
+    "noResults": "No results found",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "status": "Status",
+    "type": "Type",
+    "date": "Date",
+    "actions": "Actions",
+    "filter": "Filter",
+    "close": "Close",
+    "back": "Back",
+    "viewAll": "View All",
+    "total": "Total",
+    "priority": "Priority",
+    "assigned": "Assigned To",
+    "notes": "Notes",
+    "required": "Required",
+    "optional": "Optional"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "leads": "Leads",
+    "deals": "Deals",
+    "accounts": "Accounts",
+    "contacts": "Contacts",
+    "quotes": "Quotes",
+    "reports": "Reports",
+    "tasks": "Tasks",
+    "admin": "Admin",
+    "settings": "Settings",
+    "logout": "Logout",
+    "data": "Data",
+    "export": "Export",
+    "help": "Help"
+  },
+  "auth": {
+    "login": "Login",
+    "loginTitle": "Sign in to your account",
+    "emailLabel": "Email address",
+    "passwordLabel": "Password",
+    "loginButton": "Sign in",
+    "loginError": "Invalid email or password",
+    "loggingIn": "Signing in..."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "myDeals": "My Open Deals",
+    "myTasks": "My Tasks",
+    "myLeads": "My Leads",
+    "recentActivity": "Recent Activity",
+    "overdue": "Overdue",
+    "totalPipelineValue": "Pipeline Value",
+    "wonThisMonth": "Won This Month",
+    "openDeals": "Open Deals",
+    "newLeads": "New Leads"
+  },
+  "leads": {
+    "title": "Leads",
+    "new": "New Lead",
+    "source": "Source",
+    "sources": {
+      "email": "Email",
+      "website": "Website",
+      "event": "Event",
+      "referral": "Referral",
+      "manual": "Manual"
+    },
+    "statuses": {
+      "new": "New",
+      "contacted": "Contacted",
+      "qualified": "Qualified",
+      "converted": "Converted",
+      "lost": "Lost"
+    },
+    "company": "Company",
+    "contact": "Contact",
+    "qualify": "Qualify",
+    "convert": "Convert to Deal",
+    "convertTitle": "Convert Lead to Deal",
+    "dealTitle": "Deal Title",
+    "createAccount": "Create new account",
+    "accountName": "Account Name",
+    "estimatedVolume": "Estimated Volume",
+    "timeline": "Timeline",
+    "useCase": "Use Case"
+  },
+  "deals": {
+    "title": "Deals",
+    "new": "New Deal",
+    "pipeline": "Pipeline",
+    "listView": "List View",
+    "kanban": "Kanban",
+    "stage": "Stage",
+    "stages": {
+      "lead_received": "Lead Received",
+      "lead_qualification": "Lead Qualification",
+      "account_created": "Account Created",
+      "needs_assessment": "Needs Assessment",
+      "feasibility_check": "Feasibility Check",
+      "quote_preparation": "Quote Preparation",
+      "quote_sent": "Quote Sent",
+      "negotiation": "Negotiation",
+      "order_confirmed": "Order Confirmed",
+      "order_created_erp": "Order Created (ERP)",
+      "artwork_approval": "Artwork Approval",
+      "production_planning": "Production Planning",
+      "in_production": "In Production",
+      "quality_check": "Quality Check",
+      "shipped": "Shipped",
+      "invoice_created": "Invoice Created",
+      "payment_received": "Payment Received",
+      "deal_closed_won": "Deal Closed (Won)",
+      "lost": "Lost",
+      "on_hold": "On Hold"
+    },
+    "types": {
+      "standard": "Standard",
+      "barter": "Barter",
+      "custom": "Custom"
+    },
+    "value": "Value (EUR)",
+    "probability": "Probability (%)",
+    "closeDate": "Expected Close Date",
+    "lostReason": "Lost Reason",
+    "feasibility": "Feasibility",
+    "feasibilityChecked": "Feasibility Confirmed",
+    "artworkApproved": "Artwork Approved",
+    "orderRef": "Order Reference",
+    "invoiceRef": "Invoice Reference",
+    "advanceStage": "Advance Stage",
+    "markLost": "Mark as Lost",
+    "markOnHold": "On Hold"
+  },
+  "accounts": {
+    "title": "Accounts",
+    "new": "New Account",
+    "types": {
+      "B2B": "B2B",
+      "B2B2C": "B2B2C"
+    },
+    "statuses": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "prospect": "Prospect"
+    },
+    "industry": "Industry",
+    "segment": "Segment",
+    "country": "Country",
+    "region": "Region",
+    "website": "Website",
+    "address": "Address",
+    "accountManager": "Account Manager",
+    "jiraTicket": "Jira Ticket ID",
+    "openDeals": "Open Deals",
+    "contacts": "Contacts",
+    "activity": "Activity"
+  },
+  "contacts": {
+    "title": "Title / Role",
+    "new": "New Contact",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "isPrimary": "Primary Contact",
+    "account": "Account"
+  },
+  "quotes": {
+    "title": "Quotes",
+    "new": "New Quote",
+    "version": "Version",
+    "lineItems": "Line Items",
+    "product": "Product",
+    "qty": "Quantity",
+    "unitPrice": "Unit Price",
+    "total": "Total",
+    "addLine": "Add Line",
+    "shipping": "Shipping Cost",
+    "production": "Production Cost",
+    "grandTotal": "Grand Total",
+    "paymentTerms": "Payment Terms",
+    "validDays": "Valid for (days)",
+    "send": "Send Quote",
+    "accept": "Accept",
+    "reject": "Reject",
+    "downloadPDF": "Download PDF",
+    "statuses": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "negotiating": "Negotiating",
+      "accepted": "Accepted",
+      "rejected": "Rejected"
+    }
+  },
+  "activities": {
+    "title": "Activities",
+    "new": "Log Activity",
+    "types": {
+      "email": "Email",
+      "call": "Call",
+      "meeting": "Meeting",
+      "note": "Note",
+      "task": "Task",
+      "whatsapp": "WhatsApp"
+    },
+    "subject": "Subject",
+    "body": "Notes / Body",
+    "dueDate": "Due Date",
+    "completed": "Mark Complete",
+    "overdue": "Overdue"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "new": "New Task",
+    "description": "Description",
+    "dueDate": "Due Date",
+    "priorities": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "statuses": {
+      "open": "Open",
+      "completed": "Completed"
+    },
+    "markComplete": "Mark Complete",
+    "overdue": "Overdue"
+  },
+  "reports": {
+    "title": "Reports",
+    "pipeline": "Pipeline Overview",
+    "leads": "Lead Analytics",
+    "performance": "Sales Performance",
+    "channels": "Acquisition Channels",
+    "accounts": "Account Overview",
+    "wonDeals": "Won Deals",
+    "lostDeals": "Lost Deals",
+    "conversionRate": "Conversion Rate",
+    "totalValue": "Total Value (EUR)"
+  },
+  "admin": {
+    "title": "Admin",
+    "users": "User Management",
+    "workflows": "Workflow Rules",
+    "newUser": "New User",
+    "role": "Role",
+    "roles": {
+      "sales_rep": "Sales Rep",
+      "account_manager": "Account Manager",
+      "sales_manager": "Sales Manager",
+      "admin": "Admin"
+    },
+    "isActive": "Active",
+    "password": "Password"
+  },
+  "msGraph": {
+    "title": "Microsoft 365 Connection",
+    "connect": "Connect Outlook",
+    "disconnect": "Disconnect",
+    "connected": "Connected",
+    "notConnected": "Not Connected",
+    "description": "Connect your Microsoft 365 account to sync Outlook emails and calendar with CRM records."
+  },
+  "theme": {
+    "dark": "Dark Mode",
+    "light": "Light Mode"
+  },
+  "language": {
+    "en": "English",
+    "de": "Deutsch"
+  },
+  "settings": {
+    "title": "System Settings",
+    "pipeline": "Pipeline Stages",
+    "customFields": "Custom Fields",
+    "addStage": "Add Stage",
+    "addField": "Add Field",
+    "stageKey": "Stage Key",
+    "labelEN": "Label (EN)",
+    "labelDE": "Label (DE)",
+    "marksWon": "Marks as Won",
+    "marksLost": "Marks as Lost",
+    "appliesTo": "Applies To",
+    "fieldType": "Field Type",
+    "required": "Required"
+  },
+  "import": {
+    "title": "Salesforce Import",
+    "subtitle": "Import your existing data from Salesforce CSV or XLSX exports",
+    "chooseType": "Choose Object Type",
+    "uploadFile": "Upload File",
+    "results": "Results",
+    "startImport": "Start Import",
+    "importing": "Importing...",
+    "totalRows": "Total Rows",
+    "imported": "Imported",
+    "skipped": "Skipped",
+    "complete": "Import Complete"
+  },
+  "attachments": {
+    "title": "Attachments",
+    "upload": "Upload",
+    "dropHere": "Drop files here or click to upload",
+    "noAttachments": "No attachments yet",
+    "delete": "Delete attachment"
+  }
+}
