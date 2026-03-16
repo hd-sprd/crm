@@ -134,8 +134,57 @@ def _section_recipient(tpl: dict, account_name: str, contact_name: str,
 </div>"""
 
 
-def _section_items(tpl: dict, quote) -> str:
+async def _embed_line_image(
+    image_url: str, db: AsyncSession | None = None
+) -> tuple[str | None, str | None]:
+    """Load a line item image from disk and return (base64_data, mime_type).
+
+    Handles two URL formats:
+    - /api/v1/quotes/images/{deal_id}/{filename}  → quote-specific upload
+    - /api/v1/uploads/{id}/file                   → attachment record
+    """
+    UPLOADS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+    url_clean = image_url.split("?")[0]
+    parts = [p for p in url_clean.split("/") if p]
+
+    try:
+        # ── Case 1: quote image ───────────────────────────────────────────────
+        if "quotes" in parts and "images" in parts:
+            idx = parts.index("images")
+            if idx + 2 < len(parts):
+                deal_id, filename = parts[idx + 1], parts[idx + 2]
+                path = os.path.join(UPLOADS_ROOT, "quotes", deal_id, filename)
+                if os.path.isfile(path):
+                    ext = os.path.splitext(filename)[-1].lower()
+                    mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                            ".png": "image/png", ".gif": "image/gif",
+                            ".webp": "image/webp"}.get(ext, "image/jpeg")
+                    with open(path, "rb") as f:
+                        return base64.b64encode(f.read()).decode(), mime
+
+        # ── Case 2: attachment file ────────────────────────────────────────────
+        if "uploads" in parts and db is not None:
+            idx = parts.index("uploads")
+            if idx + 1 < len(parts):
+                att_id = int(parts[idx + 1])
+                from app.models.attachment import Attachment
+                att = (await db.execute(
+                    select(Attachment).where(Attachment.id == att_id)
+                )).scalar_one_or_none()
+                if att and att.stored_name:
+                    path = os.path.join(UPLOADS_ROOT, "attachments", att.stored_name)
+                    if os.path.isfile(path):
+                        mime = att.mime_type or "image/jpeg"
+                        with open(path, "rb") as f:
+                            return base64.b64encode(f.read()).decode(), mime
+    except Exception:
+        pass
+    return None, None
+
+
+def _section_items(tpl: dict, quote, line_images: dict) -> str:
     c = tpl.get("brand_color", "#e63329")
+    cur = getattr(quote, "currency", "EUR") or "EUR"
     rows = ""
     for i, item in enumerate(quote.line_items or []):
         bg = "#f7f7f7" if i % 2 else "#fff"
@@ -143,12 +192,34 @@ def _section_items(tpl: dict, quote) -> str:
         qty = item.get("qty", 0) if isinstance(item, dict) else item.qty
         unit = item.get("unit_price", 0) if isinstance(item, dict) else item.unit_price
         total = item.get("total", 0) if isinstance(item, dict) else item.total
+
+        def _get(key):
+            v = item.get(key) if isinstance(item, dict) else getattr(item, key, None)
+            return _html_escape(str(v)) if v else ""
+
+        pt, pc, ps = _get("print_technique"), _get("print_colors"), _get("print_size")
+        print_lines = []
+        if pt:
+            print_lines.append(f'<div><span style="color:#999">Technique:</span> {pt}</div>')
+        if pc:
+            print_lines.append(f'<div><span style="color:#999">Colors:</span> {pc}</div>')
+        if ps:
+            print_lines.append(f'<div><span style="color:#999">Size:</span> {ps}</div>')
+        badges = f'<div style="margin-top:5px;font-size:10px;color:#555;line-height:1.7">{"".join(print_lines)}</div>' if print_lines else ""
+
+        img_html = ""
+        if i in line_images:
+            img_data, img_mime = line_images[i]
+            img_html = f'<div style="flex-shrink:0"><img src="data:{img_mime};base64,{img_data}" style="width:48px;height:48px;object-fit:contain;border:1px solid #ececec;border-radius:3px;background:#fff"></div>'
+
+        product_cell = f'<div style="display:flex;align-items:flex-start;gap:8px">{img_html}<div><div style="font-weight:500">{product}</div>{badges}</div></div>'
+
         rows += f"""
     <tr style="background:{bg}">
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec">{product}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666">{qty}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666">{float(unit):.2f}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;font-weight:500">{float(total):.2f}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;vertical-align:top">{product_cell}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666;vertical-align:top">{qty}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666;vertical-align:top">{float(unit):.2f}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;font-weight:500;vertical-align:top">{float(total):.2f}</td>
     </tr>"""
 
     return f"""
@@ -158,8 +229,8 @@ def _section_items(tpl: dict, quote) -> str:
       <tr style="background:{c}">
         <th style="color:#fff;padding:8px 10px;text-align:left;font-weight:600">Product / Description</th>
         <th style="color:#fff;padding:8px 10px;text-align:right;font-weight:600;width:44px">Qty</th>
-        <th style="color:#fff;padding:8px 10px;text-align:right;font-weight:600;width:100px">Unit (EUR)</th>
-        <th style="color:#fff;padding:8px 10px;text-align:right;font-weight:600;width:100px">Total (EUR)</th>
+        <th style="color:#fff;padding:8px 10px;text-align:right;font-weight:600;width:100px">Unit ({cur})</th>
+        <th style="color:#fff;padding:8px 10px;text-align:right;font-weight:600;width:100px">Total ({cur})</th>
       </tr>
     </thead>
     <tbody>{rows}</tbody>
@@ -169,12 +240,13 @@ def _section_items(tpl: dict, quote) -> str:
 
 def _section_totals(tpl: dict, quote) -> str:
     c = tpl.get("brand_color", "#e63329")
+    cur = getattr(quote, "currency", "EUR") or "EUR"
     shipping = float(quote.shipping_cost or 0)
     production = float(quote.production_cost or 0)
     total = float(quote.total_value or 0)
 
-    shipping_line = f'<div style="color:#777">Shipping: EUR {shipping:.2f}</div>' if shipping else ""
-    production_line = f'<div style="color:#777">Production: EUR {production:.2f}</div>' if production else ""
+    shipping_line = f'<div style="color:#777">Shipping: {cur} {shipping:.2f}</div>' if shipping else ""
+    production_line = f'<div style="color:#777">Production: {cur} {production:.2f}</div>' if production else ""
 
     vat = ""
     if tpl.get("show_vat_note", True):
@@ -184,7 +256,7 @@ def _section_totals(tpl: dict, quote) -> str:
 <div style="text-align:right;font-size:11px;line-height:2.1;margin-bottom:12px">
   {shipping_line}{production_line}
   <div style="height:1px;background:#e0e0e0;margin:6px 0 6px auto;width:210px"></div>
-  <div style="font-weight:700;font-size:16px;color:{c}">TOTAL: EUR {total:,.2f}</div>
+  <div style="font-weight:700;font-size:16px;color:{c}">TOTAL: {cur} {total:,.2f}</div>
   {vat}
 </div>"""
 
@@ -274,11 +346,20 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
     valid_until = (datetime.now(timezone.utc) + timedelta(days=quote.validity_days)).strftime("%Y-%m-%d")
     logo_data, logo_mime = await _embed_logo(tpl.get("logo_url"))
 
+    # Pre-load line item images
+    line_images: dict[int, tuple[str, str]] = {}
+    for idx, item in enumerate(quote.line_items or []):
+        img_url = item.get("image_url") if isinstance(item, dict) else getattr(item, "image_url", None)
+        if img_url:
+            img_data, img_mime = await _embed_line_image(img_url, db)
+            if img_data:
+                line_images[idx] = (img_data, img_mime)
+
     # Render sections in the order defined by the template
     SECTION_RENDERERS = {
         "header":    lambda: _section_header(tpl, logo_data, logo_mime, today, valid_until, quote),
         "recipient": lambda: _section_recipient(tpl, account_name, contact_name, account_address),
-        "items":     lambda: _section_items(tpl, quote),
+        "items":     lambda: _section_items(tpl, quote, line_images),
         "totals":    lambda: _section_totals(tpl, quote),
         "terms":     lambda: _section_terms(quote),
         "notes":     lambda: _section_notes(quote),

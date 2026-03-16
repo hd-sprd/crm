@@ -13,7 +13,7 @@ import {
   Bars3Icon, PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon,
   Cog6ToothIcon, SwatchIcon, TableCellsIcon, DocumentTextIcon,
   ArrowUpTrayIcon, ArrowDownTrayIcon, ArrowsRightLeftIcon,
-  ShieldCheckIcon, ClockIcon, CodeBracketIcon,
+  ShieldCheckIcon, ClockIcon, CodeBracketIcon, CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -26,8 +26,8 @@ import DuplicatesTab from './DuplicatesTab'
 
 const COLORS = ['gray','slate','red','orange','amber','yellow','lime','green','teal','cyan','sky','blue','indigo','violet','purple','pink']
 const FIELD_TYPES = ['text', 'number', 'date', 'select', 'checkbox']
-const APPLIES_TO = ['deal', 'lead', 'contact']
-const TABS = ['pipeline', 'customFields', 'quoteTemplate', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
+const APPLIES_TO = ['deal', 'lead', 'contact', 'account', 'quote']
+const TABS = ['pipeline', 'customFields', 'currencies', 'quoteTemplate', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
 
 // ── Sortable Stage Row ──────────────────────────────────────────────────────
 
@@ -250,6 +250,7 @@ export default function Settings() {
     import: <><ArrowUpTrayIcon className="w-4 h-4 inline mr-1.5" />Import</>,
     export: <><ArrowDownTrayIcon className="w-4 h-4 inline mr-1.5" />Export</>,
     duplicates: <><ArrowsRightLeftIcon className="w-4 h-4 inline mr-1.5" />Duplicates</>,
+    currencies: <><CurrencyDollarIcon className="w-4 h-4 inline mr-1.5" />Currencies</>,
     gdpr: <><ShieldCheckIcon className="w-4 h-4 inline mr-1.5" />GDPR</>,
     auditLog: <><ClockIcon className="w-4 h-4 inline mr-1.5" />Audit Log</>,
     api: <><CodeBracketIcon className="w-4 h-4 inline mr-1.5" />API & Webhooks</>,
@@ -415,6 +416,13 @@ export default function Settings() {
           </motion.div>
         )}
 
+        {/* Currencies Tab */}
+        {tab === 'currencies' && (
+          <motion.div key="currencies" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            <CurrenciesTab />
+          </motion.div>
+        )}
+
         {/* Quote Template Tab */}
         {tab === 'quoteTemplate' && (
           <motion.div key="quoteTemplate" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
@@ -464,6 +472,227 @@ export default function Settings() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+
+// ── Currencies Tab ────────────────────────────────────────────────────────────
+
+function CurrenciesTab() {
+  const [config, setConfig] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [editingCode, setEditingCode] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [addForm, setAddForm] = useState({ code: '', name: '', symbol: '', rate: '' })
+  const [showAdd, setShowAdd] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await settingsApi.getCurrencies()
+      setConfig(data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const save = async (updated) => {
+    setSaving(true)
+    try {
+      const currencies = {}
+      for (const [code, entry] of Object.entries(updated.currencies)) {
+        currencies[code] = { name: entry.name, symbol: entry.symbol, rate: parseFloat(entry.rate) }
+      }
+      const result = await settingsApi.updateCurrencies({ base_currency: updated.base_currency, currencies })
+      setConfig(result)
+      toast.success('Currency settings saved')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Save failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSetBase = async (code) => {
+    const updated = { ...config, base_currency: code }
+    setConfig(updated)
+    await save(updated)
+  }
+
+  const handleEditSave = async (code) => {
+    const updated = {
+      ...config,
+      currencies: { ...config.currencies, [code]: { ...editForm, rate: parseFloat(editForm.rate) } }
+    }
+    setEditingCode(null)
+    setConfig(updated)
+    await save(updated)
+  }
+
+  const handleDelete = async (code) => {
+    if (code === config.base_currency) {
+      toast.error('Cannot delete base currency')
+      return
+    }
+    if (!confirm(`Remove ${code}?`)) return
+    const { [code]: _, ...rest } = config.currencies
+    const updated = { ...config, currencies: rest }
+    setConfig(updated)
+    await save(updated)
+  }
+
+  const handleAdd = async () => {
+    const code = addForm.code.toUpperCase().trim()
+    if (!code || !addForm.name || !addForm.symbol || !addForm.rate) {
+      toast.error('Fill all fields')
+      return
+    }
+    const updated = {
+      ...config,
+      currencies: {
+        ...config.currencies,
+        [code]: { name: addForm.name, symbol: addForm.symbol, rate: parseFloat(addForm.rate) }
+      }
+    }
+    setShowAdd(false)
+    setAddForm({ code: '', name: '', symbol: '', rate: '' })
+    setConfig(updated)
+    await save(updated)
+  }
+
+  if (loading) return <div className="flex items-center justify-center h-32 text-gray-400">Loading…</div>
+  if (!config) return null
+
+  const entries = Object.entries(config.currencies)
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-300">
+        <p className="font-semibold mb-1">Multi-Currency</p>
+        <p>Set a base currency and define exchange rates. Rates are stored per Deal and Quote at time of entry. Reports convert all values to the base currency using the stored rate.</p>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Base Currency</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">All reports and totals shown in this currency</p>
+          </div>
+          <select
+            className="input-field text-sm py-1.5 w-32"
+            value={config.base_currency}
+            onChange={e => handleSetBase(e.target.value)}
+            disabled={saving}
+          >
+            {entries.map(([code]) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </div>
+
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            <tr>
+              <th className="px-5 py-3 text-left">Code</th>
+              <th className="px-5 py-3 text-left">Name</th>
+              <th className="px-5 py-3 text-left">Symbol</th>
+              <th className="px-5 py-3 text-left">Rate (to {config.base_currency})</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+            {entries.map(([code, entry]) => (
+              <tr key={code} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-5 py-3 font-mono font-semibold text-gray-800 dark:text-gray-200">{code}</td>
+                {editingCode === code ? (
+                  <>
+                    <td className="px-5 py-2"><input className="input-field w-full text-xs py-1" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></td>
+                    <td className="px-5 py-2"><input className="input-field w-20 text-xs py-1" value={editForm.symbol} onChange={e => setEditForm(f => ({ ...f, symbol: e.target.value }))} /></td>
+                    <td className="px-5 py-2">
+                      {code === config.base_currency
+                        ? <span className="text-gray-400 text-xs">1.000000</span>
+                        : <input className="input-field w-28 text-xs py-1" type="number" step="0.0001" value={editForm.rate} onChange={e => setEditForm(f => ({ ...f, rate: e.target.value }))} />
+                      }
+                    </td>
+                    <td className="px-5 py-3" />
+                    <td className="px-5 py-3">
+                      <div className="flex gap-1.5">
+                        <button onClick={() => handleEditSave(code)} className="p-1.5 text-green-600 hover:text-green-700"><CheckIcon className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingCode(null)} className="p-1.5 text-gray-400 hover:text-gray-600"><XMarkIcon className="w-4 h-4" /></button>
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-300">{entry.name}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-300">{entry.symbol}</td>
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">{code === config.base_currency ? '1.000000' : Number(entry.rate).toFixed(6)}</td>
+                    <td className="px-5 py-3">
+                      {code === config.base_currency && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">Base</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex gap-1">
+                        <button onClick={() => { setEditingCode(code); setEditForm({ ...entry }) }} className="p-1.5 text-gray-400 hover:text-brand-600 transition-colors">
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        {code !== config.base_currency && (
+                          <button onClick={() => handleDelete(code)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700">
+          {showAdd ? (
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="label text-xs">Code</label>
+                <input className="input-field w-20 text-sm py-1.5" placeholder="GBP" maxLength={3}
+                  value={addForm.code} onChange={e => setAddForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} />
+              </div>
+              <div>
+                <label className="label text-xs">Name</label>
+                <input className="input-field w-36 text-sm py-1.5" placeholder="British Pound"
+                  value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-xs">Symbol</label>
+                <input className="input-field w-16 text-sm py-1.5" placeholder="£"
+                  value={addForm.symbol} onChange={e => setAddForm(f => ({ ...f, symbol: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-xs">Rate</label>
+                <input className="input-field w-24 text-sm py-1.5" type="number" step="0.0001" placeholder="0.8600"
+                  value={addForm.rate} onChange={e => setAddForm(f => ({ ...f, rate: e.target.value }))} />
+              </div>
+              <button onClick={handleAdd} className="btn-primary text-sm px-3 py-1.5 flex items-center gap-1.5">
+                <CheckIcon className="w-4 h-4" /> Add
+              </button>
+              <button onClick={() => setShowAdd(false)} className="btn-secondary text-sm px-3 py-1.5">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowAdd(true)} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+              <PlusIcon className="w-4 h-4" /> Add Currency
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

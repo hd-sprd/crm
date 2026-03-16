@@ -16,8 +16,7 @@ Required Azure AD App Registration settings:
 
 import msal
 from datetime import datetime, timezone
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -81,7 +80,8 @@ async def ms_graph_callback(
     user.ms_graph_token_expiry = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
     await db.commit()
-    return {"message": "Microsoft Graph connected successfully", "user_id": user_id}
+    frontend_url = settings.FRONTEND_URL.rstrip("/")
+    return RedirectResponse(url=f"{frontend_url}/admin?outlook=connected", status_code=302)
 
 
 @router.delete("/disconnect")

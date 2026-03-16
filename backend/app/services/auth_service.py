@@ -50,6 +50,12 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
+
+    # Throttled presence update: write at most once per 2 minutes per user
+    now = datetime.now(timezone.utc)
+    if user.last_seen_at is None or (now - user.last_seen_at).total_seconds() > 120:
+        user.last_seen_at = now  # committed by get_db at end of request
+
     return user
 
 

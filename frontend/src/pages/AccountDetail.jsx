@@ -8,6 +8,7 @@ import {
 import { accountsApi } from '../api/accounts'
 import { dealsApi } from '../api/deals'
 import { activitiesApi } from '../api/activities'
+import { settingsApi } from '../api/settings'
 import ActivityFeed from '../components/ActivityFeed'
 import AttachmentGallery from '../components/AttachmentGallery'
 import clsx from 'clsx'
@@ -38,6 +39,12 @@ export default function AccountDetail() {
   const [editData, setEditData] = useState({})
   const [saving, setSaving] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState(null)
+  const [customFieldDefs, setCustomFieldDefs] = useState([])
+  const [customFieldValues, setCustomFieldValues] = useState({})
+
+  useEffect(() => {
+    settingsApi.listCustomFields('account').then(setCustomFieldDefs).catch(() => {})
+  }, [])
 
   const load = () =>
     Promise.all([
@@ -69,6 +76,7 @@ export default function AccountDetail() {
       jira_ticket_id: account.jira_ticket_id ?? '',
       notes: account.notes ?? '',
     })
+    setCustomFieldValues(account.custom_fields || {})
     setEditing(true)
   }
 
@@ -84,6 +92,7 @@ export default function AccountDetail() {
         address: editData.address || null,
         jira_ticket_id: editData.jira_ticket_id || null,
         notes: editData.notes || null,
+        custom_fields: Object.keys(customFieldValues).length > 0 ? customFieldValues : null,
       })
       toast.success('Account updated')
       setEditing(false)
@@ -182,6 +191,21 @@ export default function AccountDetail() {
               <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
                 <p className="text-xs text-gray-400 mb-0.5">Notes</p>
                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{account.notes}</p>
+              </div>
+            )}
+            {customFieldDefs.length > 0 && account.custom_fields && Object.keys(account.custom_fields).length > 0 && (
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Custom Fields</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {customFieldDefs.filter(f => account.custom_fields[f.name] !== undefined && account.custom_fields[f.name] !== '').map(f => (
+                    <div key={f.id}>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{f.label_en}</p>
+                      <p className="text-gray-800 dark:text-gray-200">
+                        {f.field_type === 'checkbox' ? (account.custom_fields[f.name] ? 'Yes' : 'No') : String(account.custom_fields[f.name])}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -355,6 +379,38 @@ export default function AccountDetail() {
                 <label className="label">Notes</label>
                 <textarea rows={3} className="input-field w-full" value={editData.notes} onChange={e => set('notes', e.target.value)} />
               </div>
+              {customFieldDefs.length > 0 && (
+                <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Custom Fields</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {customFieldDefs.map(field => (
+                      <div key={field.id}>
+                        <label className="label">{field.label_en}{field.is_required && ' *'}</label>
+                        {field.field_type === 'select' ? (
+                          <select className="input-field w-full" value={customFieldValues[field.name] || ''}
+                            onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.value }))}>
+                            <option value="">—</option>
+                            {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        ) : field.field_type === 'checkbox' ? (
+                          <label className="flex items-center gap-2 mt-1.5">
+                            <input type="checkbox" checked={!!customFieldValues[field.name]}
+                              onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.checked }))}
+                              className="rounded border-gray-300 dark:border-gray-600" />
+                            <span className="text-sm text-gray-600 dark:text-gray-300">{field.label_en}</span>
+                          </label>
+                        ) : (
+                          <input
+                            type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                            className="input-field w-full"
+                            value={customFieldValues[field.name] || ''}
+                            onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.value }))} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 pt-2">
               <button onClick={saveEdit} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">

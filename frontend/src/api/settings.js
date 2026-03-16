@@ -29,6 +29,10 @@ export const settingsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data)
   },
+  // Currencies
+  getCurrencies: () => client.get('/settings/currencies').then(r => r.data),
+  updateCurrencies: (data) => client.put('/settings/currencies', data).then(r => r.data),
+
   logoUrl: (url) => {
     if (!url) return null
     const token = localStorage.getItem('crm_token')

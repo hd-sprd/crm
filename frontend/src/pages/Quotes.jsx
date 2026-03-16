@@ -6,7 +6,8 @@ import QuoteBuilder from '../components/QuoteBuilder'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
-import { PlusIcon, ArrowDownTrayIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ArrowDownTrayIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon } from '@heroicons/react/24/outline'
+import QuotePreview from '../components/QuotePreview'
 
 const STATUS_COLORS = {
   draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
@@ -24,6 +25,7 @@ export default function Quotes() {
   const [quotes, setQuotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showBuilder, setShowBuilder] = useState(false)
+  const [previewQuote, setPreviewQuote] = useState(null)
   const [dealId, setDealId] = useState('')
   const [deals, setDeals] = useState([])
   const [page, setPage] = useState(1)
@@ -156,6 +158,10 @@ export default function Quotes() {
                           {t('quotes.accept')}
                         </button>
                       )}
+                      <button onClick={() => setPreviewQuote(q)}
+                        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <EyeIcon className="w-3.5 h-3.5" /> Preview
+                      </button>
                       <a href={quotesApi.pdfUrl(q.id)} target="_blank" rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
                         <ArrowDownTrayIcon className="w-3.5 h-3.5" /> PDF
@@ -171,6 +177,8 @@ export default function Quotes() {
 
       <Pagination page={page} hasMore={hasMore} count={quotes.length}
         onPrev={() => setPage(p => p - 1)} onNext={() => setPage(p => p + 1)} />
+
+      {previewQuote && <QuotePreview quote={previewQuote} onClose={() => setPreviewQuote(null)} />}
     </div>
   )
 }

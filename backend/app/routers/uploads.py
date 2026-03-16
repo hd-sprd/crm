@@ -143,7 +143,7 @@ async def upload_file(
     has_thumb = False
     if mime in IMAGE_MIME_TYPES and not storage_svc.is_supabase():
         # Thumbnails only generated for local storage
-        file_path = os.path.join(UPLOAD_DIR, stored_name)
+        file_path = os.path.join(UPLOAD_DIR, "attachments", stored_name)
         thumb_path = os.path.join(THUMB_DIR, stored_name + ".jpg")
         has_thumb = _make_thumbnail(file_path, thumb_path)
 
@@ -192,11 +192,15 @@ async def serve_file(
         content = await storage_svc.download("attachments", att.stored_name)
         if content is None:
             raise HTTPException(status_code=404, detail="File not found in storage")
+        disp = "inline" if att.mime_type in IMAGE_MIME_TYPES else f'attachment; filename="{att.original_name}"'
         return Response(content=content, media_type=att.mime_type,
-                        headers={"Content-Disposition": f'attachment; filename="{att.original_name}"'})
-    path = os.path.join(UPLOAD_DIR, att.stored_name)
+                        headers={"Content-Disposition": disp})
+    path = os.path.join(UPLOAD_DIR, "attachments", att.stored_name)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found on disk")
+    # Images: no Content-Disposition so browsers render them inline in <img> tags
+    if att.mime_type in IMAGE_MIME_TYPES:
+        return FileResponse(path, media_type=att.mime_type)
     return FileResponse(path, media_type=att.mime_type, filename=att.original_name)
 
 

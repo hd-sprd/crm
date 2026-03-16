@@ -11,4 +11,16 @@ export const quotesApi = {
     const token = localStorage.getItem('crm_token')
     return `/api/v1/quotes/${id}/pdf${token ? `?token=${token}` : ''}`
   },
+  uploadImage: (dealId, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return client.post(`/quotes/images?deal_id=${dealId}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  imageUrl: (path) => {
+    if (!path) return ''
+    const token = localStorage.getItem('crm_token')
+    return `${path}${token ? `?token=${token}` : ''}`
+  },
 }

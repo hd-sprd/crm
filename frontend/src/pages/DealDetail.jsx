@@ -12,8 +12,10 @@ import { format } from 'date-fns'
 import { dealsApi } from '../api/deals'
 import { quotesApi } from '../api/quotes'
 import { activitiesApi } from '../api/activities'
+import { settingsApi } from '../api/settings'
 import ActivityFeed from '../components/ActivityFeed'
 import QuoteBuilder from '../components/QuoteBuilder'
+import QuotePreview from '../components/QuotePreview'
 import AttachmentGallery from '../components/AttachmentGallery'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
@@ -59,8 +61,12 @@ export default function DealDetail() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [showLogForm, setShowLogForm] = useState(false)
   const [showQuoteBuilder, setShowQuoteBuilder] = useState(false)
+  const [previewQuote, setPreviewQuote] = useState(null)
   const [logData, setLogData] = useState({ type: 'call', subject: '', body: '' })
   const [loggingActivity, setLoggingActivity] = useState(false)
+  const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
+  const [customFieldDefs, setCustomFieldDefs] = useState([])
+  const [customFieldValues, setCustomFieldValues] = useState({})
 
   const loadActivities = () =>
     activitiesApi.list({ related_to_type: 'deal', related_to_id: Number(id), limit: 100 })
@@ -77,6 +83,8 @@ export default function DealDetail() {
   useEffect(() => {
     load()
     loadActivities()
+    settingsApi.getCurrencies().then(setCurrencies).catch(() => {})
+    settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {})
   }, [id])
 
   const openEdit = () => {
@@ -85,6 +93,8 @@ export default function DealDetail() {
       type: deal.type,
       stage: deal.stage,
       value_eur: deal.value_eur ?? '',
+      currency: deal.currency ?? 'EUR',
+      exchange_rate_eur: deal.exchange_rate_eur ?? 1,
       probability: deal.probability ?? 0,
       expected_close_date: deal.expected_close_date ?? '',
       product_type: deal.product_type ?? '',
@@ -96,6 +106,7 @@ export default function DealDetail() {
       payment_received: deal.payment_received,
       jira_ticket_id: deal.jira_ticket_id ?? '',
     })
+    setCustomFieldValues(deal.custom_fields || {})
     setEditing(true)
   }
 
@@ -106,12 +117,16 @@ export default function DealDetail() {
         await dealsApi.changeStage(id, { stage: editData.stage })
       }
       const { stage, ...rest } = editData
+      const currencyRate = currencies.currencies[rest.currency]?.rate ?? rest.exchange_rate_eur ?? 1
       await dealsApi.update(id, {
         ...rest,
         value_eur: rest.value_eur !== '' ? Number(rest.value_eur) : null,
+        currency: rest.currency || 'EUR',
+        exchange_rate_eur: currencyRate,
         probability: Number(rest.probability),
         quantity: rest.quantity !== '' ? Number(rest.quantity) : null,
         expected_close_date: rest.expected_close_date || null,
+        custom_fields: customFieldValues,
       })
       toast.success('Deal updated')
       setEditing(false)
@@ -193,7 +208,7 @@ export default function DealDetail() {
           {/* Key metrics */}
           <div className="grid grid-cols-3 gap-4">
             {[
-              { icon: CurrencyEuroIcon, label: t('deals.value'), value: deal.value_eur ? `€ ${Number(deal.value_eur).toLocaleString()}` : '—', color: 'brand' },
+              { icon: CurrencyEuroIcon, label: t('deals.value'), value: deal.value_eur ? `${currencies.currencies[deal.currency]?.symbol || deal.currency || '€'} ${Number(deal.value_eur).toLocaleString()}` : '—', color: 'brand' },
               { icon: BriefcaseIcon, label: t('deals.probability'), value: `${deal.probability}%`, color: 'blue' },
               { icon: CalendarIcon, label: t('deals.closeDate'), value: deal.expected_close_date || '—', color: 'purple' },
             ].map(({ icon: Icon, label, value, color }, i) => (
@@ -242,6 +257,23 @@ export default function DealDetail() {
             </div>
           </div>
 
+          {/* Custom Fields */}
+          {customFieldDefs.length > 0 && deal.custom_fields && Object.keys(deal.custom_fields).length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">Custom Fields</h2>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {customFieldDefs.filter(f => deal.custom_fields[f.name] !== undefined && deal.custom_fields[f.name] !== '').map(f => (
+                  <div key={f.id}>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{f.label_en}</p>
+                    <p className="text-gray-800 dark:text-gray-200">
+                      {f.field_type === 'checkbox' ? (deal.custom_fields[f.name] ? 'Yes' : 'No') : String(deal.custom_fields[f.name])}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Quotes */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -270,8 +302,9 @@ export default function DealDetail() {
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        € {Number(q.total_value).toLocaleString()}
+                        {currencies.currencies[q.currency]?.symbol || q.currency || '€'} {Number(q.total_value).toLocaleString()}
                       </span>
+                      <button onClick={() => setPreviewQuote(q)} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">Preview</button>
                       <button onClick={() => handleDownloadPDF(q.id)} className="text-xs text-brand-600 hover:underline">PDF</button>
                     </div>
                   </div>
@@ -444,6 +477,7 @@ export default function DealDetail() {
             </div>
             <QuoteBuilder
               dealId={Number(id)}
+              initialCurrency={deal.currency || currencies.base_currency}
               onCreated={() => {
                 setShowQuoteBuilder(false)
                 load()
@@ -452,6 +486,8 @@ export default function DealDetail() {
           </div>
         </div>
       )}
+
+      {previewQuote && <QuotePreview quote={previewQuote} onClose={() => setPreviewQuote(null)} />}
 
       {/* Edit Modal */}
       {editing && (
@@ -484,9 +520,21 @@ export default function DealDetail() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Value (EUR)</label>
+                  <label className="label">Currency</label>
+                  <select
+                    className="input-field w-full"
+                    value={editData.currency || 'EUR'}
+                    onChange={e => set('currency', e.target.value)}
+                  >
+                    {Object.entries(currencies.currencies).map(([code, c]) => (
+                      <option key={code} value={code}>{code} ({c.symbol})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Value</label>
                   <input type="number" step="0.01" className="input-field w-full" value={editData.value_eur} onChange={e => set('value_eur', e.target.value)} />
                 </div>
                 <div>
@@ -532,6 +580,43 @@ export default function DealDetail() {
                   </label>
                 ))}
               </div>
+              {customFieldDefs.length > 0 && (
+                <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Custom Fields</p>
+                  {customFieldDefs.map(field => (
+                    <div key={field.id}>
+                      <label className="label">{field.label_en}{field.is_required && ' *'}</label>
+                      {field.field_type === 'select' ? (
+                        <select
+                          className="input-field w-full"
+                          value={customFieldValues[field.name] ?? ''}
+                          onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.value }))}
+                        >
+                          <option value="">—</option>
+                          {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : field.field_type === 'checkbox' ? (
+                        <label className="flex items-center gap-2 mt-1.5">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 dark:border-gray-600"
+                            checked={!!customFieldValues[field.name]}
+                            onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.checked }))}
+                          />
+                          <span className="text-sm text-gray-600 dark:text-gray-300">{field.label_en}</span>
+                        </label>
+                      ) : (
+                        <input
+                          type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                          className="input-field w-full"
+                          value={customFieldValues[field.name] ?? ''}
+                          onChange={e => setCustomFieldValues(v => ({ ...v, [field.name]: e.target.value }))}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 pt-2">
               <button onClick={saveEdit} disabled={saving} className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">

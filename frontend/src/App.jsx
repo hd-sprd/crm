@@ -17,7 +17,9 @@ import Admin from './pages/Admin'
 import Settings from './pages/Settings'
 import DealDetail from './pages/DealDetail'
 import AccountDetail from './pages/AccountDetail'
+import ContactDetail from './pages/ContactDetail'
 import Help from './pages/Help'
+import QuotePortal from './pages/QuotePortal'
 import './i18n'
 
 function ProtectedRoute({ children }) {
@@ -40,6 +42,9 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Public — no auth required */}
+      <Route path="/portal/quote/:token" element={<QuotePortal />} />
+
       <Route
         path="/login"
         element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
@@ -55,6 +60,7 @@ function AppRoutes() {
         <Route path="accounts" element={<PermRoute perm="view_accounts"><Accounts /></PermRoute>} />
         <Route path="accounts/:id" element={<PermRoute perm="view_accounts"><AccountDetail /></PermRoute>} />
         <Route path="contacts" element={<PermRoute perm="view_contacts"><Contacts /></PermRoute>} />
+        <Route path="contacts/:id" element={<PermRoute perm="view_contacts"><ContactDetail /></PermRoute>} />
         <Route path="quotes"   element={<PermRoute perm="view_quotes"><Quotes /></PermRoute>} />
         <Route path="tasks"    element={<PermRoute perm="view_tasks"><Tasks /></PermRoute>} />
         <Route path="reports"  element={<PermRoute perm="view_reports"><Reports /></PermRoute>} />

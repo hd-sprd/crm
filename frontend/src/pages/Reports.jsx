@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { reportsApi } from '../api/reports'
+import { settingsApi } from '../api/settings'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -8,27 +9,55 @@ import {
 
 const PIE_COLORS = ['#e63329','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4']
 
+function KpiCard({ label, value, sub, color = 'brand' }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+      <p className={`text-2xl font-bold text-${color}-600 dark:text-${color}-400`}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
 export default function Reports() {
   const { t } = useTranslation()
   const [pipeline, setPipeline] = useState({})
   const [leadsData, setLeadsData] = useState({})
   const [performance, setPerformance] = useState([])
   const [channels, setChannels] = useState({})
+  const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [currencyConfig, setCurrencyConfig] = useState({ base_currency: 'EUR', currencies: { EUR: { symbol: '€' } } })
 
-  useEffect(() => {
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  const load = useCallback((from, to) => {
+    setLoading(true)
+    const params = {}
+    if (from) params.date_from = from
+    if (to) params.date_to = to + 'T23:59:59'
     Promise.all([
-      reportsApi.pipeline(),
-      reportsApi.leads(),
-      reportsApi.performance(),
-      reportsApi.channels(),
-    ]).then(([p, l, perf, ch]) => {
+      reportsApi.pipeline(params),
+      reportsApi.leads(params),
+      reportsApi.performance(params),
+      reportsApi.channels(params),
+      reportsApi.summary(params),
+      settingsApi.getCurrencies(),
+    ]).then(([p, l, perf, ch, sum, curr]) => {
       setPipeline(p.pipeline || {})
       setLeadsData(l.leads_by_status || {})
       setPerformance(perf.performance || [])
       setChannels(ch.leads_by_channel || {})
+      setSummary(sum)
+      setCurrencyConfig(curr)
     }).finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { load('', '') }, [load])
+
+  const applyFilters = () => load(dateFrom, dateTo)
+  const clearFilters = () => { setDateFrom(''); setDateTo(''); load('', '') }
 
   const pipelineData = Object.entries(pipeline).map(([stage, data]) => ({
     name: t(`deals.stages.${stage}`, { defaultValue: stage }),
@@ -46,11 +75,39 @@ export default function Reports() {
     count,
   }))
 
+  const baseCurrency = currencyConfig.base_currency
+  const baseCurrencySymbol = currencyConfig.currencies[baseCurrency]?.symbol || baseCurrency
+  const fmt = (v) => `${baseCurrencySymbol} ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('reports.title')}</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('reports.title')}</h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)} title="From" />
+          <span className="text-gray-400 text-xs">–</span>
+          <input type="date" className="input-field text-sm py-1.5 w-36" value={dateTo}
+            onChange={e => setDateTo(e.target.value)} title="To" />
+          <button onClick={applyFilters} className="btn-secondary text-sm px-3 py-1.5">Apply</button>
+          {(dateFrom || dateTo) && (
+            <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">Clear</button>
+          )}
+        </div>
+      </div>
+
+      {/* KPI Summary */}
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <KpiCard label="Pipeline Value" value={fmt(summary.pipeline_value_eur)} color="brand" />
+          <KpiCard label="Won Value" value={fmt(summary.won_value_eur)} color="green" />
+          <KpiCard label="Win Rate" value={`${summary.win_rate}%`}
+            sub={`${summary.won_deals} won / ${summary.lost_deals} lost`} color="blue" />
+          <KpiCard label="Total Leads" value={summary.total_leads} color="purple" />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Pipeline bar chart */}
@@ -102,19 +159,23 @@ export default function Reports() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
-                  <th className="pb-2 font-medium">User ID</th>
-                  <th className="pb-2 font-medium">{t('reports.wonDeals')}</th>
-                  <th className="pb-2 font-medium">{t('reports.lostDeals')}</th>
-                  <th className="pb-2 font-medium">{t('reports.totalValue')}</th>
+                  <th className="pb-2 font-medium">Rep</th>
+                  <th className="pb-2 font-medium">Won</th>
+                  <th className="pb-2 font-medium">Lost</th>
+                  <th className="pb-2 font-medium">Open</th>
+                  <th className="pb-2 font-medium">Pipeline</th>
+                  <th className="pb-2 font-medium">Won Value</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {performance.map((row, i) => (
                   <tr key={i}>
-                    <td className="py-2 text-gray-700 dark:text-gray-300">#{row.user_id}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300 font-medium">{row.user_name}</td>
                     <td className="py-2 text-green-600 font-medium">{row.won}</td>
                     <td className="py-2 text-red-500">{row.lost}</td>
-                    <td className="py-2 text-gray-700 dark:text-gray-300">EUR {Number(row.won_value_eur).toLocaleString()}</td>
+                    <td className="py-2 text-gray-500">{row.open}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300">{fmt(row.pipeline_value_eur)}</td>
+                    <td className="py-2 text-gray-700 dark:text-gray-300 font-medium">{fmt(row.won_value_eur)}</td>
                   </tr>
                 ))}
               </tbody>

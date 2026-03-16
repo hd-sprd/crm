@@ -27,6 +27,7 @@ class User(Base):
     ms_graph_refresh_token: Mapped[str | None] = mapped_column(String(4096))
     ms_graph_token_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

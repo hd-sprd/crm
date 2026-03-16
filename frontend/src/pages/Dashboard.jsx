@@ -6,6 +6,7 @@ import { leadsApi } from '../api/leads'
 import { tasksApi } from '../api/tasks'
 import { activitiesApi } from '../api/activities'
 import { reportsApi } from '../api/reports'
+import { settingsApi } from '../api/settings'
 import Pipeline from '../components/Pipeline'
 import TaskList from '../components/TaskList'
 import ActivityFeed from '../components/ActivityFeed'
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const [activities, setActivities] = useState([])
   const [pipeline, setPipeline] = useState({})
   const [loading, setLoading] = useState(true)
+  const [currencyConfig, setCurrencyConfig] = useState({ base_currency: 'EUR', currencies: { EUR: { symbol: '€' } } })
 
   useEffect(() => {
     const isManager = ['sales_manager', 'admin'].includes(user?.role)
@@ -51,7 +53,9 @@ export default function Dashboard() {
       tasksApi.list({ ...params, status: 'open', limit: 20 }),
       activitiesApi.list({ ...params, limit: 15 }),
       reportsApi.pipeline(),
-    ]).then(([d, l, tk, ac, p]) => {
+      settingsApi.getCurrencies(),
+    ]).then(([d, l, tk, ac, p, curr]) => {
+      setCurrencyConfig(curr)
       setDeals(d)
       setLeads(l)
       setTasks(tk)
@@ -60,9 +64,11 @@ export default function Dashboard() {
     }).finally(() => setLoading(false))
   }, [user])
 
+  const baseCurrencySymbol = currencyConfig.currencies[currencyConfig.base_currency]?.symbol || currencyConfig.base_currency
+
   const totalValue = deals
     .filter(d => !['lost', 'deal_closed_won', 'on_hold'].includes(d.stage))
-    .reduce((s, d) => s + Number(d.value_eur || 0), 0)
+    .reduce((s, d) => s + Number(d.value_eur || 0) * Number(d.exchange_rate_eur || 1), 0)
 
   const wonDeals = Object.values(pipeline).find ? pipeline['deal_closed_won']?.count ?? 0 : 0
   const overdueTaskCount = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length
@@ -84,7 +90,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label={t('dashboard.openDeals')} value={deals.filter(d => !['lost','deal_closed_won'].includes(d.stage)).length} icon={BriefcaseIcon} color="brand" />
         <StatCard label={t('dashboard.newLeads')} value={leads.length} icon={UserGroupIcon} color="blue" />
-        <StatCard label={t('dashboard.totalPipelineValue')} value={`€${(totalValue / 1000).toFixed(0)}k`} icon={CurrencyEuroIcon} color="green" />
+        <StatCard label={t('dashboard.totalPipelineValue')} value={`${baseCurrencySymbol}${(totalValue / 1000).toFixed(0)}k`} icon={CurrencyEuroIcon} color="green" />
         <StatCard label={t('dashboard.wonThisMonth')} value={wonDeals} icon={TrophyIcon} color="yellow" />
       </div>
 

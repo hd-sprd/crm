@@ -458,6 +458,77 @@ async def update_role_permissions(
     return body
 
 
+# ── Currencies ───────────────────────────────────────────────────────────────
+
+CURRENCY_SETTING_KEY = "currency_config"
+
+DEFAULT_CURRENCY_CONFIG = {
+    "base_currency": "EUR",
+    "currencies": {
+        "EUR": {"name": "Euro", "symbol": "€", "rate": 1.0},
+        "USD": {"name": "US Dollar", "symbol": "$", "rate": 1.08},
+        "GBP": {"name": "British Pound", "symbol": "£", "rate": 0.86},
+        "CHF": {"name": "Swiss Franc", "symbol": "Fr", "rate": 0.94},
+    },
+}
+
+
+class CurrencyEntry(BaseModel):
+    name: str
+    symbol: str
+    rate: float
+
+
+class CurrencyConfigUpdate(BaseModel):
+    base_currency: str
+    currencies: dict[str, CurrencyEntry]
+
+
+async def _get_currency_config(db: AsyncSession) -> dict:
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == CURRENCY_SETTING_KEY)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return DEFAULT_CURRENCY_CONFIG
+    return json.loads(row.value)
+
+
+@router.get("/currencies")
+async def get_currencies(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await _get_currency_config(db)
+
+
+@router.put("/currencies")
+async def update_currencies(
+    payload: CurrencyConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if payload.base_currency not in payload.currencies:
+        raise HTTPException(
+            status_code=400,
+            detail="base_currency must be present in currencies list",
+        )
+    # Ensure base currency always has rate 1.0
+    data = payload.model_dump()
+    data["currencies"][payload.base_currency]["rate"] = 1.0
+
+    result = await db.execute(
+        select(SystemSetting).where(SystemSetting.key == CURRENCY_SETTING_KEY)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        db.add(SystemSetting(key=CURRENCY_SETTING_KEY, value=json.dumps(data)))
+    else:
+        row.value = json.dumps(data)
+    await db.commit()
+    return data
+
+
 @router.get("/quote-template/logo/{filename}")
 async def serve_quote_logo(
     filename: str,

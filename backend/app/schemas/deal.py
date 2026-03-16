@@ -16,6 +16,8 @@ class DealCreate(BaseModel):
     branding_requirements: Optional[str] = None
     shipping_location: Optional[str] = None
     value_eur: Optional[float] = None
+    currency: str = "EUR"
+    exchange_rate_eur: float = 1.0
     probability: int = 0
     expected_close_date: Optional[date] = None
     jira_ticket_id: Optional[str] = None
@@ -39,6 +41,8 @@ class DealUpdate(BaseModel):
     invoice_reference: Optional[str] = None
     payment_received: Optional[bool] = None
     value_eur: Optional[float] = None
+    currency: Optional[str] = None
+    exchange_rate_eur: Optional[float] = None
     probability: Optional[int] = None
     expected_close_date: Optional[date] = None
     lost_reason: Optional[str] = None
@@ -71,6 +75,8 @@ class DealOut(BaseModel):
     invoice_reference: Optional[str]
     payment_received: bool
     value_eur: Optional[float]
+    currency: str
+    exchange_rate_eur: float
     probability: int
     expected_close_date: Optional[date]
     lost_reason: Optional[str]

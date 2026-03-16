@@ -11,6 +11,7 @@ class ContactCreate(BaseModel):
     phone: Optional[str] = None
     title: Optional[str] = None
     is_primary: bool = False
+    custom_fields: Optional[dict] = None
 
 
 class ContactUpdate(BaseModel):
@@ -20,6 +21,7 @@ class ContactUpdate(BaseModel):
     phone: Optional[str] = None
     title: Optional[str] = None
     is_primary: Optional[bool] = None
+    custom_fields: Optional[dict] = None
 
 
 class ContactOut(BaseModel):
@@ -31,6 +33,7 @@ class ContactOut(BaseModel):
     phone: Optional[str]
     title: Optional[str]
     is_primary: bool
+    custom_fields: Optional[dict]
     created_at: datetime
     updated_at: datetime
 

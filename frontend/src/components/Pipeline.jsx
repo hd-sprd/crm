@@ -41,14 +41,14 @@ const KANBAN_STAGES = [
 function CardContent({ deal }) {
   return (
     <>
-      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{deal.title}</p>
+      <p className="text-xs font-medium text-gray-900 dark:text-white truncate leading-tight">{deal.title}</p>
       {deal.value_eur && (
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          EUR {Number(deal.value_eur).toLocaleString()}
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+          {deal.currency || 'EUR'} {Number(deal.value_eur).toLocaleString()}
         </p>
       )}
       {deal.probability > 0 && (
-        <div className="mt-2">
+        <div className="mt-1.5">
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1">
             <div className="bg-brand-600 h-1 rounded-full" style={{ width: `${deal.probability}%` }} />
           </div>
@@ -66,7 +66,7 @@ function DraggableCard({ deal, isActive }) {
     <div
       ref={setNodeRef}
       className={clsx(
-        'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 transition-opacity',
+        'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-2 transition-opacity w-40 flex-shrink-0',
         isActive ? 'opacity-30' : 'hover:shadow-md',
       )}
     >
@@ -80,7 +80,7 @@ function DraggableCard({ deal, isActive }) {
           onClick={e => e.stopPropagation()}
           title="Drag to change stage"
         >
-          <Bars3Icon className="w-3.5 h-3.5" />
+          <Bars3Icon className="w-3 h-3" />
         </button>
       </div>
     </div>
@@ -90,16 +90,21 @@ function DraggableCard({ deal, isActive }) {
 function DroppableColumn({ stage, children, label, count, colorClass }) {
   const { isOver, setNodeRef } = useDroppable({ id: stage })
   return (
-    <div className="flex-shrink-0 w-64">
-      <div className={clsx('rounded-t-lg px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200', colorClass)}>
-        {label}
-        <span className="ml-1 text-gray-400">({count})</span>
+    <div className="flex items-start gap-2">
+      {/* Stage label – fixed width on the left */}
+      <div className={clsx(
+        'w-44 flex-shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200 leading-tight',
+        colorClass,
+      )}>
+        <span className="block truncate">{label}</span>
+        <span className="text-gray-400 font-normal">{count} deal{count !== 1 ? 's' : ''}</span>
       </div>
+      {/* Drop zone – cards wrap horizontally */}
       <div
         ref={setNodeRef}
         className={clsx(
-          'space-y-2 mt-2 min-h-[120px] rounded-b-lg p-1 transition-colors',
-          isOver ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-inset ring-blue-300 dark:ring-blue-600' : '',
+          'flex-1 flex flex-wrap gap-2 min-h-[52px] rounded-lg p-1.5 transition-colors',
+          isOver ? 'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-inset ring-blue-300 dark:ring-blue-600' : 'bg-gray-50/50 dark:bg-gray-700/20',
         )}
       >
         {children}
@@ -140,7 +145,7 @@ export default function Pipeline({ deals = [], onStageChange }) {
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="space-y-1.5">
         {KANBAN_STAGES.map(stage => (
           <DroppableColumn
             key={stage}
@@ -158,7 +163,7 @@ export default function Pipeline({ deals = [], onStageChange }) {
 
       <DragOverlay dropAnimation={null}>
         {activeDeal && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-blue-400 p-3 w-64 rotate-1 opacity-95">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-blue-400 p-2 w-40 rotate-1 opacity-95">
             <CardContent deal={activeDeal} />
           </div>
         )}

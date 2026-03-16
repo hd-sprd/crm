@@ -8,6 +8,7 @@ from app.routers import auth, users, accounts, contacts, leads, deals, quotes, a
 from app.routers import settings as settings_router
 from app.routers import uploads, import_data, gdpr, audit_log as audit_log_router
 from app.routers import search, notifications as notifications_router, saved_views as saved_views_router
+from app.routers import quote_portal
 from app.integrations import ms_graph
 from app.middleware.security import (
     SecurityHeadersMiddleware,
@@ -81,6 +82,7 @@ app.include_router(search.router, prefix=PREFIX)
 app.include_router(notifications_router.router, prefix=PREFIX)
 app.include_router(saved_views_router.router, prefix=PREFIX)
 app.include_router(ms_graph.router, prefix=PREFIX)
+app.include_router(quote_portal.router, prefix=PREFIX)
 
 
 @app.get("/health")

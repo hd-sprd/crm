@@ -1,8 +1,12 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
+import os
+import uuid
+import secrets
 
 from app.database import get_db
 from app.models.quote import Quote, QuoteStatus
@@ -12,7 +16,7 @@ from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteOut
 from app.services.auth_service import get_current_user
 from app.services.quote_service import create_quote_version, calculate_total
 from app.reports.pdf_generator import generate_quote_pdf
-from app.routers.uploads import _auth_from_request
+from app.routers.uploads import _auth_from_request, UPLOAD_DIR, MAX_FILE_SIZE, _validate_magic_bytes
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
@@ -106,6 +110,8 @@ async def send_quote(
     quote = result.scalar_one_or_none()
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
+    if not quote.access_token:
+        quote.access_token = secrets.token_urlsafe(32)
     quote.status = QuoteStatus.sent
     quote.sent_at = datetime.now(timezone.utc)
     # Advance deal to quote_sent stage
@@ -129,6 +135,41 @@ async def accept_quote(
     quote.status = QuoteStatus.accepted
     quote.accepted_at = datetime.now(timezone.utc)
     return quote
+
+
+@router.post("/images")
+async def upload_quote_image(
+    deal_id: int = Query(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
+    mime = (file.content_type or "").lower().split(";")[0].strip()
+    _validate_magic_bytes(content, mime, file.filename or "upload")
+    folder = os.path.join(UPLOAD_DIR, "quotes", str(deal_id))
+    os.makedirs(folder, exist_ok=True)
+    ext = os.path.splitext(file.filename or "img")[-1].lower() or ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(folder, filename), "wb") as fh:
+        fh.write(content)
+    return {"url": f"/api/v1/quotes/images/{deal_id}/{filename}"}
+
+
+@router.get("/images/{deal_id}/{filename}")
+async def serve_quote_image(
+    deal_id: int,
+    filename: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    await _auth_from_request(request, db)
+    path = os.path.join(UPLOAD_DIR, "quotes", str(deal_id), filename)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path)
 
 
 @router.get("/{quote_id}/pdf")

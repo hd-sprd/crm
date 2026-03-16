@@ -16,6 +16,7 @@ import { usersApi } from '../api/users'
 import useBulkSelect from '../hooks/useBulkSelect'
 import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
+import { settingsApi } from '../api/settings'
 
 const ALL_STAGES = [
   'lead_received', 'lead_qualification', 'account_created', 'needs_assessment',
@@ -44,6 +45,9 @@ export default function Deals() {
   const [dateTo, setDateTo] = useState('')
 
   const [users, setUsers] = useState([])
+  const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
+  const [newDealCurrency, setNewDealCurrency] = useState('EUR')
+  const [customFieldDefs, setCustomFieldDefs] = useState([])
   const { dealViewMode, setDealViewMode } = useAppStore()
   const navigate = useNavigate()
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm()
@@ -65,6 +69,8 @@ export default function Deals() {
   useEffect(() => { fetch(page) }, [page])  // eslint-disable-line
   useEffect(() => { accountsApi.list({ limit: 200 }).then(setAccounts) }, [])
   useEffect(() => { usersApi.list().then(setUsers).catch(() => {}) }, [])
+  useEffect(() => { settingsApi.getCurrencies().then(setCurrencies).catch(() => {}) }, [])
+  useEffect(() => { settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {}) }, [])
 
   const applyFilters = () => { setPage(1); fetch(1) }
   const hasFilter = search || stageFilter || typeFilter || dateFrom || dateTo
@@ -88,10 +94,13 @@ export default function Deals() {
 
   const onCreateDeal = async (data) => {
     try {
+      const currencyRate = currencies.currencies[newDealCurrency]?.rate ?? 1
       const payload = {
         ...data,
         account_id: Number(data.account_id),
         value_eur: data.value_eur ? Number(data.value_eur) : null,
+        currency: newDealCurrency,
+        exchange_rate_eur: currencyRate,
         probability: data.probability ? Number(data.probability) : 0,
         quantity: data.quantity ? Number(data.quantity) : null,
       }
@@ -188,7 +197,7 @@ export default function Deals() {
       {/* New Deal Modal */}
       {showNew && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">New Deal</h2>
               <button onClick={() => { setShowNew(false); reset() }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -225,9 +234,21 @@ export default function Deals() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Value (EUR)</label>
+                  <label className="label">Currency</label>
+                  <select
+                    className="input-field w-full"
+                    value={newDealCurrency}
+                    onChange={e => setNewDealCurrency(e.target.value)}
+                  >
+                    {Object.entries(currencies.currencies).map(([code, c]) => (
+                      <option key={code} value={code}>{code} ({c.symbol})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Value</label>
                   <input type="number" step="0.01" className="input-field w-full" {...register('value_eur')} />
                 </div>
                 <div>
@@ -249,6 +270,28 @@ export default function Deals() {
                 <label className="label">Expected Close Date</label>
                 <input type="date" className="input-field w-full" {...register('expected_close_date')} />
               </div>
+              {customFieldDefs.map(field => (
+                <div key={field.id}>
+                  <label className="label">{field.label_en}{field.is_required && ' *'}</label>
+                  {field.field_type === 'select' ? (
+                    <select className="input-field w-full" {...register(`custom_fields.${field.name}`, { required: field.is_required })}>
+                      <option value="">—</option>
+                      {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : field.field_type === 'checkbox' ? (
+                    <label className="flex items-center gap-2 mt-1.5">
+                      <input type="checkbox" {...register(`custom_fields.${field.name}`)} className="rounded border-gray-300 dark:border-gray-600" />
+                      <span className="text-sm text-gray-600 dark:text-gray-300">{field.label_en}</span>
+                    </label>
+                  ) : (
+                    <input
+                      type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                      className="input-field w-full"
+                      {...register(`custom_fields.${field.name}`, { required: field.is_required })}
+                    />
+                  )}
+                </div>
+              ))}
               <div className="flex gap-2 pt-2">
                 <button type="submit" disabled={isSubmitting} className="btn-primary flex-1 disabled:opacity-50">
                   {isSubmitting ? 'Creating…' : 'Create Deal'}
@@ -309,7 +352,9 @@ export default function Deals() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
-                    {deal.value_eur ? `EUR ${Number(deal.value_eur).toLocaleString()}` : '—'}
+                    {deal.value_eur
+                      ? `${deal.currency || 'EUR'} ${Number(deal.value_eur).toLocaleString()}`
+                      : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

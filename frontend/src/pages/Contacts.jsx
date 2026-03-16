@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { contactsApi } from '../api/contacts'
+import { settingsApi } from '../api/settings'
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useForm } from 'react-hook-form'
@@ -23,8 +24,11 @@ export default function Contacts() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
+  const [customFieldDefs, setCustomFieldDefs] = useState([])
   const { register, handleSubmit, reset } = useForm()
   const bulk = useBulkSelect(contacts)
+
+  useEffect(() => { settingsApi.listCustomFields('contact').then(setCustomFieldDefs).catch(() => {}) }, [])
 
   const fetch = useCallback((p) => {
     setLoading(true)
@@ -111,6 +115,28 @@ export default function Contacts() {
               <input className="input-field w-full" {...register('phone')} /></div>
             <div><label className="label">{t('contacts.title')}</label>
               <input className="input-field w-full" {...register('title')} /></div>
+            {customFieldDefs.map(field => (
+              <div key={field.id}>
+                <label className="label">{field.label_en}{field.is_required && ' *'}</label>
+                {field.field_type === 'select' ? (
+                  <select className="input-field w-full" {...register(`custom_fields.${field.name}`, { required: field.is_required })}>
+                    <option value="">—</option>
+                    {field.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : field.field_type === 'checkbox' ? (
+                  <label className="flex items-center gap-2 mt-1.5">
+                    <input type="checkbox" {...register(`custom_fields.${field.name}`)} className="rounded border-gray-300 dark:border-gray-600" />
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{field.label_en}</span>
+                  </label>
+                ) : (
+                  <input
+                    type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                    className="input-field w-full"
+                    {...register(`custom_fields.${field.name}`, { required: field.is_required })}
+                  />
+                )}
+              </div>
+            ))}
             <div className="flex gap-2 items-end">
               <button type="submit" className="btn-primary">{t('common.save')}</button>
               <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('common.cancel')}</button>

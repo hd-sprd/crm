@@ -17,6 +17,7 @@ class AccountCreate(BaseModel):
     account_manager_id: Optional[int] = None
     jira_ticket_id: Optional[str] = None
     notes: Optional[str] = None
+    custom_fields: Optional[dict] = None
 
 
 class AccountUpdate(BaseModel):
@@ -32,6 +33,7 @@ class AccountUpdate(BaseModel):
     account_manager_id: Optional[int] = None
     jira_ticket_id: Optional[str] = None
     notes: Optional[str] = None
+    custom_fields: Optional[dict] = None
 
 
 class AccountOut(BaseModel):
@@ -48,6 +50,7 @@ class AccountOut(BaseModel):
     account_manager_id: Optional[int]
     jira_ticket_id: Optional[str]
     notes: Optional[str]
+    custom_fields: Optional[dict]
     created_at: datetime
     updated_at: datetime
 

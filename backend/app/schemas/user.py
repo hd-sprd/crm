@@ -38,6 +38,7 @@ class UserOut(BaseModel):
     role: UserRole
     region: Optional[str]
     is_active: bool
+    last_seen_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import client from '../api/client'
 import toast from 'react-hot-toast'
 import { PlusIcon, PencilIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
@@ -120,13 +121,7 @@ function UsersTab() {
       )}
 
       {/* Microsoft Graph section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-2">{t('msGraph.title')}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t('msGraph.description')}</p>
-        <a href="/api/v1/integrations/ms-graph/authorize" className="btn-secondary inline-flex">
-          {t('msGraph.connect')}
-        </a>
-      </div>
+      <MsGraphCard />
 
       {/* User table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -135,7 +130,7 @@ function UsersTab() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700/50">
               <tr>
-                {['Name', 'Email', 'Role', 'Region', 'Active', 'Actions'].map(h => (
+                {['Name', 'Email', 'Role', 'Region', 'Last seen', 'Active', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {h}
                   </th>
@@ -144,7 +139,7 @@ function UsersTab() {
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {loading
-                ? <tr><td colSpan={6} className="text-center py-8 text-gray-400">Loading…</td></tr>
+                ? <tr><td colSpan={7} className="text-center py-8 text-gray-400">Loading…</td></tr>
                 : users.map(u => (
                   <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{u.full_name}</td>
@@ -177,6 +172,9 @@ function UsersTab() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{u.region || '—'}</td>
                     <td className="px-4 py-3">
+                      <OnlineStatus lastSeenAt={u.last_seen_at} />
+                    </td>
+                    <td className="px-4 py-3">
                       <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
                         u.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
                           : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
@@ -196,6 +194,139 @@ function UsersTab() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────
+// Online presence indicator
+// ──────────────────────────────────────────────
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000 // 5 minutes
+
+function OnlineStatus({ lastSeenAt }) {
+  if (!lastSeenAt) {
+    return <span className="text-xs text-gray-400">Never</span>
+  }
+  const diffMs = Date.now() - new Date(lastSeenAt).getTime()
+  const isOnline = diffMs < ONLINE_THRESHOLD_MS
+
+  const relativeTime = () => {
+    const secs = Math.floor(diffMs / 1000)
+    if (secs < 60) return 'just now'
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={clsx(
+        'w-2 h-2 rounded-full flex-shrink-0',
+        isOnline ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600',
+      )} />
+      <span className={clsx(
+        'text-xs',
+        isOnline ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-400',
+      )}>
+        {isOnline ? 'Online' : relativeTime()}
+      </span>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────
+// Microsoft Graph / Outlook card
+// ──────────────────────────────────────────────
+function MsGraphCard() {
+  const { t } = useTranslation()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [status, setStatus] = useState(null) // null=loading, {connected, token_expiry}
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  const loadStatus = useCallback(() => {
+    client.get('/integrations/ms-graph/status')
+      .then(r => setStatus(r.data))
+      .catch(() => setStatus({ connected: false }))
+  }, [])
+
+  useEffect(() => {
+    loadStatus()
+    // Handle redirect back from OAuth
+    if (searchParams.get('outlook') === 'connected') {
+      toast.success('Outlook connected successfully!')
+      setSearchParams({}, { replace: true })
+    }
+  }, []) // eslint-disable-line
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true)
+    try {
+      await client.delete('/integrations/ms-graph/disconnect')
+      toast.success('Outlook disconnected.')
+      loadStatus()
+    } catch {
+      toast.error('Failed to disconnect.')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">{t('msGraph.title')}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('msGraph.description')}</p>
+        </div>
+        {status !== null && (
+          <span className={clsx(
+            'flex-shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+            status.connected
+              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+          )}>
+            {status.connected ? '● Connected' : '○ Not connected'}
+          </span>
+        )}
+      </div>
+
+      {status === null && (
+        <p className="text-xs text-gray-400 mt-3">Checking status…</p>
+      )}
+
+      {status !== null && !status.connected && (
+        <div className="mt-4 space-y-3">
+          <p className="text-xs text-gray-400">
+            Requires an Azure AD App Registration with <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">Mail.ReadWrite</code> and <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">Calendars.ReadWrite</code> permissions.
+            Set <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">AZURE_TENANT_ID</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">AZURE_CLIENT_ID</code>, <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">AZURE_CLIENT_SECRET</code> in the backend <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.env</code>.
+          </p>
+          <a href="/api/v1/integrations/ms-graph/authorize" className="btn-secondary inline-flex">
+            {t('msGraph.connect')}
+          </a>
+        </div>
+      )}
+
+      {status !== null && status.connected && (
+        <div className="mt-4 flex items-center gap-3">
+          {status.token_expiry && (
+            <p className="text-xs text-gray-400">
+              Token valid until {new Date(status.token_expiry).toLocaleString()}
+            </p>
+          )}
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="btn-secondary text-sm px-3 py-1.5 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40"
+          >
+            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+          <a href="/api/v1/integrations/ms-graph/authorize" className="text-xs text-brand-600 hover:underline">
+            Re-authorize
+          </a>
+        </div>
+      )}
     </div>
   )
 }

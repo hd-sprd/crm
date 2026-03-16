@@ -67,6 +67,8 @@ class Deal(Base):
     invoice_reference: Mapped[str | None] = mapped_column(String(200))
     payment_received: Mapped[bool] = mapped_column(Boolean, default=False)
     value_eur: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="EUR", nullable=False)
+    exchange_rate_eur: Mapped[float] = mapped_column(Numeric(10, 6), default=1.0, nullable=False)
     probability: Mapped[int] = mapped_column(Integer, default=0)
     expected_close_date: Mapped[date | None] = mapped_column(Date)
     lost_reason: Mapped[str | None] = mapped_column(Text)
