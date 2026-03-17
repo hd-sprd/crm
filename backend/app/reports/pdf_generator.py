@@ -4,6 +4,7 @@ Sections are rendered in the order stored in the quote_template system setting,
 matching exactly what the visual editor shows.
 """
 import os
+import re
 import json
 import base64
 from datetime import datetime, timezone, timedelta
@@ -33,6 +34,8 @@ _DEFAULT_TPL = {
     ],
     "footer_text": "This quote is valid for {validity_days} days from date of issue.",
     "show_vat_note": True,
+    "number_format": {"decimal_places": 2, "thousands_sep": ".", "decimal_sep": ","},
+    "date_format": "DD.MM.YYYY",
 }
 
 
@@ -51,9 +54,7 @@ async def _load_template(db: AsyncSession) -> dict:
 
 
 async def _embed_logo(logo_url: str | None) -> tuple[str | None, str | None]:
-    """Load logo and embed as base64 data URI.
-    Handles local disk paths (/api/v1/...) and Supabase public URLs (https://...).
-    """
+    """Load logo and embed as base64 data URI."""
     if not logo_url:
         return None, None
     try:
@@ -82,11 +83,130 @@ async def _embed_logo(logo_url: str | None) -> tuple[str | None, str | None]:
     return None, None
 
 
-# ── Section HTML renderers ────────────────────────────────────────────────────
+# ── Format helpers ────────────────────────────────────────────────────────────
 
 def _html_escape(s: str) -> str:
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+
+def _format_number(value: float, tpl: dict, decimal_places: int | None = None) -> str:
+    """Format a number using the template's number_format config."""
+    fmt = tpl.get("number_format", {})
+    dec = fmt.get("decimal_places", 2) if decimal_places is None else decimal_places
+    dec_sep = fmt.get("decimal_sep", ",")
+    thou_sep = fmt.get("thousands_sep", ".")
+
+    # Format with standard US style first: "1,234.56"
+    raw = f"{abs(value):,.{dec}f}"
+    prefix = "-" if value < 0 else ""
+
+    if dec_sep == "," and thou_sep == ".":
+        result = raw.replace(",", "THOU").replace(".", ",").replace("THOU", ".")
+    elif dec_sep == "." and thou_sep == ",":
+        result = raw  # already US style
+    elif dec_sep == "." and thou_sep == " ":
+        result = raw.replace(",", "\u202f")
+    elif dec_sep == "," and thou_sep == " ":
+        result = raw.replace(",", "THOU").replace(".", ",").replace("THOU", "\u202f")
+    elif dec_sep == "," and thou_sep == "":
+        result = raw.replace(",", "").replace(".", ",")
+    elif dec_sep == "." and thou_sep == "":
+        result = raw.replace(",", "")
+    else:
+        result = raw
+
+    return prefix + result
+
+
+def _format_date(date_str: str, tpl: dict) -> str:
+    """Format a date string (YYYY-MM-DD) using the template's date_format config."""
+    if not date_str:
+        return ""
+    fmt = tpl.get("date_format", "DD.MM.YYYY")
+    try:
+        dt = datetime.strptime(str(date_str)[:10], "%Y-%m-%d")
+        if fmt == "DD.MM.YYYY":
+            return dt.strftime("%d.%m.%Y")
+        elif fmt == "MM/DD/YYYY":
+            return dt.strftime("%m/%d/%Y")
+        elif fmt == "YYYY-MM-DD":
+            return dt.strftime("%Y-%m-%d")
+        elif fmt == "D. MMM YYYY":
+            return f"{dt.day}. {dt.strftime('%b')} {dt.year}"
+        return str(date_str)
+    except Exception:
+        return str(date_str)
+
+
+def _substitute_vars(text: str, variables: dict) -> str:
+    """Replace {key} placeholders in text with values from variables dict."""
+    def replace(match):
+        key = match.group(1)
+        return _html_escape(str(variables.get(key, match.group(0))))
+    return re.sub(r"\{([^}]+)\}", replace, _html_escape(text))
+
+
+def _build_variables(tpl: dict, quote, deal, account, contact,
+                     sales_rep: str, today: str, valid_until: str) -> dict:
+    """Build the full variable substitution dict for a quote."""
+    cur = getattr(quote, "currency", "EUR") or "EUR"
+
+    def fnum(v):
+        try:
+            return _format_number(float(v or 0), tpl)
+        except Exception:
+            return str(v or "")
+
+    def fdate(v):
+        return _format_date(str(v), tpl) if v else ""
+
+    return {
+        # Quote
+        "quote.id": str(quote.id),
+        "quote.version": str(quote.version),
+        "quote.date": _format_date(today, tpl),
+        "quote.valid_until": _format_date(valid_until, tpl),
+        "quote.validity_days": str(quote.validity_days),
+        "quote.total_value": f"{cur} {fnum(quote.total_value)}",
+        "quote.shipping_cost": fnum(quote.shipping_cost),
+        "quote.production_cost": fnum(quote.production_cost),
+        "quote.currency": cur,
+        "quote.payment_terms": quote.payment_terms or "",
+        "quote.notes": quote.notes or "",
+        # Deal
+        "deal.title": (deal.title if deal else "") or "",
+        "deal.value_eur": fnum(deal.value_eur if deal else 0),
+        "deal.product_type": (deal.product_type if deal else "") or "",
+        "deal.quantity": str(deal.quantity or "") if deal else "",
+        "deal.branding_requirements": (deal.branding_requirements if deal else "") or "",
+        "deal.shipping_location": (deal.shipping_location if deal else "") or "",
+        "deal.expected_close_date": fdate(deal.expected_close_date if deal else ""),
+        "deal.type": (deal.type if deal else "") or "",
+        "deal.stage": (deal.stage if deal else "") or "",
+        "deal.order_reference": (deal.order_reference if deal else "") or "",
+        "deal.invoice_reference": (deal.invoice_reference if deal else "") or "",
+        "deal.jira_ticket_id": (deal.jira_ticket_id if deal else "") or "",
+        # Account
+        "account.name": (account.name if account else "") or "",
+        "account.address": (account.address if account else "") or "",
+        "account.country": (account.country if account else "") or "",
+        "account.industry": (account.industry if account else "") or "",
+        "account.website": (account.website if account else "") or "",
+        # Contact
+        "contact.full_name": f"{contact.first_name} {contact.last_name}".strip() if contact else "",
+        "contact.first_name": (contact.first_name if contact else "") or "",
+        "contact.last_name": (contact.last_name if contact else "") or "",
+        "contact.email": (contact.email if contact else "") or "",
+        "contact.phone": (contact.phone if contact else "") or "",
+        "contact.title": (contact.title if contact else "") or "",
+        # Sales rep
+        "rep.name": sales_rep,
+        # Backward compat
+        "validity_days": str(quote.validity_days),
+    }
+
+
+# ── Section HTML renderers ────────────────────────────────────────────────────
 
 def _section_header(tpl: dict, logo_data: str | None, logo_mime: str | None,
                     today: str, valid_until: str, quote) -> str:
@@ -95,6 +215,8 @@ def _section_header(tpl: dict, logo_data: str | None, logo_mime: str | None,
     email = _html_escape(tpl.get("company_email", ""))
     company = _html_escape(tpl.get("company_name", ""))
     address = _html_escape(tpl.get("company_address", ""))
+    today_fmt = _format_date(today, tpl)
+    valid_fmt = _format_date(valid_until, tpl)
 
     if logo_data:
         logo_html = f'<img src="data:{logo_mime};base64,{logo_data}" style="max-height:56px;max-width:180px;object-fit:contain;display:block">'
@@ -113,8 +235,8 @@ def _section_header(tpl: dict, logo_data: str | None, logo_mime: str | None,
     <div style="font-weight:700;font-size:16px;color:#1a1a1a;margin-bottom:2px">
       QUOTE #{quote.id}&nbsp;·&nbsp;v{quote.version}
     </div>
-    Date: {today}<br>
-    Valid until: {valid_until}<br>
+    Date: {today_fmt}<br>
+    Valid until: {valid_fmt}<br>
     {phone_line}{email_line}
   </div>
 </div>"""
@@ -137,18 +259,11 @@ def _section_recipient(tpl: dict, account_name: str, contact_name: str,
 async def _embed_line_image(
     image_url: str, db: AsyncSession | None = None
 ) -> tuple[str | None, str | None]:
-    """Load a line item image from disk and return (base64_data, mime_type).
-
-    Handles two URL formats:
-    - /api/v1/quotes/images/{deal_id}/{filename}  → quote-specific upload
-    - /api/v1/uploads/{id}/file                   → attachment record
-    """
     UPLOADS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
     url_clean = image_url.split("?")[0]
     parts = [p for p in url_clean.split("/") if p]
 
     try:
-        # ── Case 1: quote image ───────────────────────────────────────────────
         if "quotes" in parts and "images" in parts:
             idx = parts.index("images")
             if idx + 2 < len(parts):
@@ -162,7 +277,6 @@ async def _embed_line_image(
                     with open(path, "rb") as f:
                         return base64.b64encode(f.read()).decode(), mime
 
-        # ── Case 2: attachment file ────────────────────────────────────────────
         if "uploads" in parts and db is not None:
             idx = parts.index("uploads")
             if idx + 1 < len(parts):
@@ -213,13 +327,15 @@ def _section_items(tpl: dict, quote, line_images: dict) -> str:
             img_html = f'<div style="flex-shrink:0"><img src="data:{img_mime};base64,{img_data}" style="width:48px;height:48px;object-fit:contain;border:1px solid #ececec;border-radius:3px;background:#fff"></div>'
 
         product_cell = f'<div style="display:flex;align-items:flex-start;gap:8px">{img_html}<div><div style="font-weight:500">{product}</div>{badges}</div></div>'
+        unit_fmt = _format_number(float(unit), tpl)
+        total_fmt = _format_number(float(total), tpl)
 
         rows += f"""
     <tr style="background:{bg}">
       <td style="padding:7px 10px;border-bottom:1px solid #ececec;vertical-align:top">{product_cell}</td>
       <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666;vertical-align:top">{qty}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666;vertical-align:top">{float(unit):.2f}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;font-weight:500;vertical-align:top">{float(total):.2f}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;color:#666;vertical-align:top">{unit_fmt}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #ececec;text-align:right;font-weight:500;vertical-align:top">{total_fmt}</td>
     </tr>"""
 
     return f"""
@@ -245,8 +361,8 @@ def _section_totals(tpl: dict, quote) -> str:
     production = float(quote.production_cost or 0)
     total = float(quote.total_value or 0)
 
-    shipping_line = f'<div style="color:#777">Shipping: {cur} {shipping:.2f}</div>' if shipping else ""
-    production_line = f'<div style="color:#777">Production: {cur} {production:.2f}</div>' if production else ""
+    shipping_line = f'<div style="color:#777">Shipping: {cur} {_format_number(shipping, tpl)}</div>' if shipping else ""
+    production_line = f'<div style="color:#777">Production: {cur} {_format_number(production, tpl)}</div>' if production else ""
 
     vat = ""
     if tpl.get("show_vat_note", True):
@@ -256,7 +372,7 @@ def _section_totals(tpl: dict, quote) -> str:
 <div style="text-align:right;font-size:11px;line-height:2.1;margin-bottom:12px">
   {shipping_line}{production_line}
   <div style="height:1px;background:#e0e0e0;margin:6px 0 6px auto;width:210px"></div>
-  <div style="font-weight:700;font-size:16px;color:{c}">TOTAL: {cur} {total:,.2f}</div>
+  <div style="font-weight:700;font-size:16px;color:{c}">TOTAL: {cur} {_format_number(total, tpl)}</div>
   {vat}
 </div>"""
 
@@ -291,9 +407,9 @@ def _section_signature(sales_rep: str) -> str:
 </div>"""
 
 
-def _section_footer(tpl: dict, validity_days: int) -> str:
-    text = (tpl.get("footer_text") or "This quote is valid for {validity_days} days from date of issue."
-            ).replace("{validity_days}", str(validity_days))
+def _section_footer(tpl: dict, variables: dict) -> str:
+    raw = tpl.get("footer_text") or "This quote is valid for {validity_days} days from date of issue."
+    text = _substitute_vars(raw, variables)
     company = _html_escape(tpl.get("company_name", ""))
     address = _html_escape(tpl.get("company_address", ""))
     addr_part = f" · {address}" if address else ""
@@ -301,7 +417,22 @@ def _section_footer(tpl: dict, validity_days: int) -> str:
 <div style="margin-top:32px;border-top:1px solid #e8e8e8;padding-top:12px;
             font-size:10px;color:#aaa;line-height:1.7">
   <strong style="color:#999">{company}</strong>{addr_part}<br>
-  {_html_escape(text)}
+  {text}
+</div>"""
+
+
+def _section_custom_text(section: dict, variables: dict) -> str:
+    """Render a custom text block with variable substitution."""
+    content = section.get("content", "")
+    if not content:
+        return ""
+    content_html = _substitute_vars(content, variables).replace("\n", "<br>")
+    label = _html_escape(section.get("label", ""))
+    label_html = f'<div style="font-weight:600;font-size:12px;color:#333;margin-bottom:6px">{label}</div>' if label else ""
+    return f"""
+<div style="font-size:11px;color:#444;margin-bottom:12px">
+  {label_html}
+  <div style="line-height:1.7">{content_html}</div>
 </div>"""
 
 
@@ -325,18 +456,19 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
     deal_result = await db.execute(select(Deal).where(Deal.id == quote.deal_id))
     deal = deal_result.scalar_one_or_none()
 
-    account_name, account_address, contact_name, sales_rep = "N/A", "", "", "N/A"
+    account, contact, sales_rep = None, None, "N/A"
+    account_name, account_address, contact_name = "N/A", "", ""
 
     if deal:
         if deal.account_id:
-            acc = (await db.execute(select(Account).where(Account.id == deal.account_id))).scalar_one_or_none()
-            if acc:
-                account_name = acc.name
-                account_address = acc.address or ""
+            account = (await db.execute(select(Account).where(Account.id == deal.account_id))).scalar_one_or_none()
+            if account:
+                account_name = account.name
+                account_address = account.address or ""
         if deal.contact_id:
-            con = (await db.execute(select(Contact).where(Contact.id == deal.contact_id))).scalar_one_or_none()
-            if con:
-                contact_name = f"{con.first_name} {con.last_name}"
+            contact = (await db.execute(select(Contact).where(Contact.id == deal.contact_id))).scalar_one_or_none()
+            if contact:
+                contact_name = f"{contact.first_name} {contact.last_name}"
         if deal.assigned_to:
             usr = (await db.execute(select(User).where(User.id == deal.assigned_to))).scalar_one_or_none()
             if usr:
@@ -345,6 +477,9 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     valid_until = (datetime.now(timezone.utc) + timedelta(days=quote.validity_days)).strftime("%Y-%m-%d")
     logo_data, logo_mime = await _embed_logo(tpl.get("logo_url"))
+
+    # Build variable substitution dict
+    variables = _build_variables(tpl, quote, deal, account, contact, sales_rep, today, valid_until)
 
     # Pre-load line item images
     line_images: dict[int, tuple[str, str]] = {}
@@ -355,7 +490,7 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
             if img_data:
                 line_images[idx] = (img_data, img_mime)
 
-    # Render sections in the order defined by the template
+    # Built-in section renderers
     SECTION_RENDERERS = {
         "header":    lambda: _section_header(tpl, logo_data, logo_mime, today, valid_until, quote),
         "recipient": lambda: _section_recipient(tpl, account_name, contact_name, account_address),
@@ -364,12 +499,17 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
         "terms":     lambda: _section_terms(quote),
         "notes":     lambda: _section_notes(quote),
         "signature": lambda: _section_signature(sales_rep),
-        "footer":    lambda: _section_footer(tpl, quote.validity_days),
+        "footer":    lambda: _section_footer(tpl, variables),
     }
 
     body_html = ""
     for section in tpl.get("sections", _DEFAULT_TPL["sections"]):
-        if section.get("enabled", True):
+        if not section.get("enabled", True):
+            continue
+        section_type = section.get("type", "builtin")
+        if section_type == "custom_text":
+            body_html += _section_custom_text(section, variables)
+        else:
             renderer = SECTION_RENDERERS.get(section["id"])
             if renderer:
                 body_html += renderer()

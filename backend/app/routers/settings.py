@@ -9,7 +9,8 @@ from typing import Any, Optional
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.settings import PipelineStage, SystemSetting, CustomFieldDef
+from app.models.settings import SystemSetting, CustomFieldDef
+from app.models.workflow import Workflow, WorkflowStage
 from app.models.user import User, UserRole
 from app.services.auth_service import get_current_user
 import app.services.storage as storage_svc
@@ -23,9 +24,9 @@ def require_admin(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-# ── Pipeline Stages ──────────────────────────────────────────────────────────
+# ── Workflows ─────────────────────────────────────────────────────────────────
 
-class PipelineStageCreate(BaseModel):
+class WorkflowStageCreate(BaseModel):
     key: str
     label_en: str
     label_de: str
@@ -33,9 +34,14 @@ class PipelineStageCreate(BaseModel):
     stage_order: int
     is_won: bool = False
     is_lost: bool = False
+    requires_quote: bool = False
+    requires_approved_quote: bool = False
+    requires_feasibility: bool = False
+    requires_artwork: bool = False
+    requires_invoice: bool = False
 
 
-class PipelineStageUpdate(BaseModel):
+class WorkflowStageUpdate(BaseModel):
     label_en: Optional[str] = None
     label_de: Optional[str] = None
     color: Optional[str] = None
@@ -43,10 +49,16 @@ class PipelineStageUpdate(BaseModel):
     is_won: Optional[bool] = None
     is_lost: Optional[bool] = None
     is_active: Optional[bool] = None
+    requires_quote: Optional[bool] = None
+    requires_approved_quote: Optional[bool] = None
+    requires_feasibility: Optional[bool] = None
+    requires_artwork: Optional[bool] = None
+    requires_invoice: Optional[bool] = None
 
 
-class PipelineStageOut(BaseModel):
+class WorkflowStageOut(BaseModel):
     id: int
+    workflow_id: int
     key: str
     label_en: str
     label_de: str
@@ -55,76 +67,212 @@ class PipelineStageOut(BaseModel):
     is_won: bool
     is_lost: bool
     is_active: bool
+    requires_quote: bool
+    requires_approved_quote: bool
+    requires_feasibility: bool
+    requires_artwork: bool
+    requires_invoice: bool
     model_config = {"from_attributes": True}
 
 
-@router.get("/pipeline-stages", response_model=list[PipelineStageOut])
-async def list_pipeline_stages(
+class WorkflowCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    quote_approval_target_stage: Optional[str] = None
+
+
+class WorkflowUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    quote_approval_target_stage: Optional[str] = None
+
+
+class WorkflowOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    is_default: bool
+    quote_approval_target_stage: Optional[str]
+    model_config = {"from_attributes": True}
+
+
+class WorkflowWithStagesOut(WorkflowOut):
+    stages: list[WorkflowStageOut] = []
+
+
+@router.get("/workflows", response_model=list[WorkflowWithStagesOut])
+async def list_workflows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(PipelineStage).order_by(PipelineStage.stage_order)
+        select(Workflow).order_by(Workflow.is_default.desc(), Workflow.id)
+    )
+    workflows = result.scalars().unique().all()
+    # Ensure stages are loaded
+    out = []
+    for wf in workflows:
+        stages_result = await db.execute(
+            select(WorkflowStage)
+            .where(WorkflowStage.workflow_id == wf.id)
+            .order_by(WorkflowStage.stage_order)
+        )
+        wf_dict = WorkflowOut.model_validate(wf).model_dump()
+        wf_dict["stages"] = [WorkflowStageOut.model_validate(s) for s in stages_result.scalars().all()]
+        out.append(wf_dict)
+    return out
+
+
+@router.post("/workflows", response_model=WorkflowWithStagesOut, status_code=201)
+async def create_workflow(
+    payload: WorkflowCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    wf = Workflow(**payload.model_dump(), is_default=False)
+    db.add(wf)
+    await db.flush()
+    return {**WorkflowOut.model_validate(wf).model_dump(), "stages": []}
+
+
+@router.get("/workflows/{workflow_id}", response_model=WorkflowWithStagesOut)
+async def get_workflow(
+    workflow_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
+    wf = result.scalar_one_or_none()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    stages_result = await db.execute(
+        select(WorkflowStage)
+        .where(WorkflowStage.workflow_id == wf.id)
+        .order_by(WorkflowStage.stage_order)
+    )
+    wf_dict = WorkflowOut.model_validate(wf).model_dump()
+    wf_dict["stages"] = [WorkflowStageOut.model_validate(s) for s in stages_result.scalars().all()]
+    return wf_dict
+
+
+@router.patch("/workflows/{workflow_id}", response_model=WorkflowOut)
+async def update_workflow(
+    workflow_id: int,
+    payload: WorkflowUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
+    wf = result.scalar_one_or_none()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    for k, v in payload.model_dump(exclude_none=True).items():
+        setattr(wf, k, v)
+    return wf
+
+
+@router.delete("/workflows/{workflow_id}", status_code=204)
+async def delete_workflow(
+    workflow_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
+    wf = result.scalar_one_or_none()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if wf.is_default:
+        raise HTTPException(status_code=400, detail="Cannot delete the default workflow")
+    await db.delete(wf)
+
+
+@router.get("/workflows/{workflow_id}/stages", response_model=list[WorkflowStageOut])
+async def list_workflow_stages(
+    workflow_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(WorkflowStage)
+        .where(WorkflowStage.workflow_id == workflow_id)
+        .order_by(WorkflowStage.stage_order)
     )
     return result.scalars().all()
 
 
-@router.post("/pipeline-stages", response_model=PipelineStageOut, status_code=201)
-async def create_pipeline_stage(
-    payload: PipelineStageCreate,
+@router.post("/workflows/{workflow_id}/stages", response_model=WorkflowStageOut, status_code=201)
+async def create_workflow_stage(
+    workflow_id: int,
+    payload: WorkflowStageCreate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    existing = await db.execute(select(PipelineStage).where(PipelineStage.key == payload.key))
+    wf_result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
+    if not wf_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    existing = await db.execute(
+        select(WorkflowStage).where(
+            WorkflowStage.workflow_id == workflow_id, WorkflowStage.key == payload.key
+        )
+    )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Stage key already exists")
-    stage = PipelineStage(**payload.model_dump())
+        raise HTTPException(status_code=400, detail="Stage key already exists in this workflow")
+    stage = WorkflowStage(workflow_id=workflow_id, **payload.model_dump())
     db.add(stage)
     await db.flush()
     return stage
 
 
-@router.patch("/pipeline-stages/{stage_id}", response_model=PipelineStageOut)
-async def update_pipeline_stage(
+@router.patch("/workflow-stages/{stage_id}", response_model=WorkflowStageOut)
+async def update_workflow_stage(
     stage_id: int,
-    payload: PipelineStageUpdate,
+    payload: WorkflowStageUpdate,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    result = await db.execute(select(PipelineStage).where(PipelineStage.id == stage_id))
+    result = await db.execute(select(WorkflowStage).where(WorkflowStage.id == stage_id))
     stage = result.scalar_one_or_none()
     if not stage:
         raise HTTPException(status_code=404, detail="Stage not found")
-    for field, value in payload.model_dump(exclude_none=True).items():
-        setattr(stage, field, value)
+    for k, v in payload.model_dump(exclude_none=True).items():
+        setattr(stage, k, v)
     return stage
 
 
-@router.delete("/pipeline-stages/{stage_id}", status_code=204)
-async def delete_pipeline_stage(
+@router.delete("/workflow-stages/{stage_id}", status_code=204)
+async def delete_workflow_stage(
     stage_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    result = await db.execute(select(PipelineStage).where(PipelineStage.id == stage_id))
+    result = await db.execute(select(WorkflowStage).where(WorkflowStage.id == stage_id))
     stage = result.scalar_one_or_none()
     if not stage:
         raise HTTPException(status_code=404, detail="Stage not found")
     await db.delete(stage)
 
 
-@router.post("/pipeline-stages/reorder", response_model=list[PipelineStageOut])
-async def reorder_pipeline_stages(
+@router.post("/workflows/{workflow_id}/stages/reorder", response_model=list[WorkflowStageOut])
+async def reorder_workflow_stages(
+    workflow_id: int,
     order: list[dict],  # [{id: 1, stage_order: 0}, ...]
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
     for item in order:
-        result = await db.execute(select(PipelineStage).where(PipelineStage.id == item["id"]))
+        result = await db.execute(
+            select(WorkflowStage).where(
+                WorkflowStage.id == item["id"], WorkflowStage.workflow_id == workflow_id
+            )
+        )
         stage = result.scalar_one_or_none()
         if stage:
             stage.stage_order = item["stage_order"]
-    result = await db.execute(select(PipelineStage).order_by(PipelineStage.stage_order))
+    result = await db.execute(
+        select(WorkflowStage)
+        .where(WorkflowStage.workflow_id == workflow_id)
+        .order_by(WorkflowStage.stage_order)
+    )
     return result.scalars().all()
 
 
@@ -298,6 +446,8 @@ class QuoteTemplateUpdate(BaseModel):
     sections: Optional[list[dict]] = None
     footer_text: Optional[str] = None
     show_vat_note: Optional[bool] = None
+    number_format: Optional[dict] = None
+    date_format: Optional[str] = None
 
 
 @router.get("/quote-template")

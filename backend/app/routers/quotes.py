@@ -11,6 +11,7 @@ import secrets
 from app.database import get_db
 from app.models.quote import Quote, QuoteStatus
 from app.models.deal import Deal
+from app.models.workflow import WorkflowStage
 from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteOut
 from app.services.auth_service import get_current_user
@@ -134,6 +135,30 @@ async def accept_quote(
         raise HTTPException(status_code=404, detail="Quote not found")
     quote.status = QuoteStatus.accepted
     quote.accepted_at = datetime.now(timezone.utc)
+
+    # Auto-advance deal stage based on workflow configuration
+    deal_result = await db.execute(select(Deal).where(Deal.id == quote.deal_id))
+    deal = deal_result.scalar_one_or_none()
+    if deal and deal.workflow and deal.workflow.quote_approval_target_stage:
+        target_key = deal.workflow.quote_approval_target_stage
+        # Only advance if deal is not already at/past the target stage
+        current_s = await db.execute(
+            select(WorkflowStage).where(
+                WorkflowStage.workflow_id == deal.workflow_id,
+                WorkflowStage.key == deal.stage,
+            )
+        )
+        target_s = await db.execute(
+            select(WorkflowStage).where(
+                WorkflowStage.workflow_id == deal.workflow_id,
+                WorkflowStage.key == target_key,
+            )
+        )
+        current_stage = current_s.scalar_one_or_none()
+        target_stage = target_s.scalar_one_or_none()
+        if current_stage and target_stage and current_stage.stage_order < target_stage.stage_order:
+            deal.stage = target_key
+
     return quote
 
 

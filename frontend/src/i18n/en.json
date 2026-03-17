@@ -282,7 +282,7 @@
   },
   "settings": {
     "title": "System Settings",
-    "pipeline": "Pipeline Stages",
+    "workflows": "Workflows",
     "customFields": "Custom Fields",
     "addStage": "Add Stage",
     "addField": "Add Field",

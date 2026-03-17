@@ -18,24 +18,21 @@ import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
 import { settingsApi } from '../api/settings'
 
-const ALL_STAGES = [
-  'lead_received', 'lead_qualification', 'account_created', 'needs_assessment',
-  'feasibility_check', 'quote_preparation', 'quote_sent', 'negotiation',
-  'order_confirmed', 'order_created_erp', 'artwork_approval', 'production_planning',
-  'in_production', 'quality_check', 'shipped', 'invoice_created',
-  'payment_received', 'deal_closed_won', 'lost', 'on_hold',
-]
-
 const PAGE_SIZE = 50
 
 export default function Deals() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [deals, setDeals] = useState([])
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
+
+  // Workflow state
+  const [workflows, setWorkflows] = useState([])
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(null)
+  const [workflowStages, setWorkflowStages] = useState([])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -53,7 +50,9 @@ export default function Deals() {
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm()
   const bulk = useBulkSelect(deals)
 
-  const fetch = useCallback((p) => {
+  const stageLabel = (stage) => i18n.language === 'de' ? stage.label_de : stage.label_en
+
+  const fetch = useCallback((p, workflowId) => {
     setLoading(true)
     const params = { skip: (p - 1) * PAGE_SIZE, limit: PAGE_SIZE }
     if (stageFilter) params.stage = stageFilter
@@ -61,22 +60,50 @@ export default function Deals() {
     if (search) params.search = search
     if (dateFrom) params.created_after = dateFrom
     if (dateTo) params.created_before = dateTo + 'T23:59:59'
+    if (workflowId) params.workflow_id = workflowId
     dealsApi.list(params)
       .then(data => { setDeals(data); setHasMore(data.length === PAGE_SIZE) })
       .finally(() => setLoading(false))
   }, [search, stageFilter, typeFilter, dateFrom, dateTo])
 
-  useEffect(() => { fetch(page) }, [page])  // eslint-disable-line
+  // Load workflows on mount — listWorkflows already includes stages, so set both at once
+  useEffect(() => {
+    settingsApi.listWorkflows().then(wfs => {
+      setWorkflows(wfs)
+      const def = wfs.find(w => w.is_default) || wfs[0]
+      if (def) {
+        setSelectedWorkflowId(def.id)
+        setWorkflowStages(def.stages || [])
+      } else {
+        fetch(1, null)
+      }
+    }).catch(() => fetch(1, null))
+  }, [])  // eslint-disable-line
+
+  // Fetch deals when page or selected workflow changes
+  useEffect(() => {
+    if (selectedWorkflowId) fetch(page, selectedWorkflowId)
+  }, [page, selectedWorkflowId])  // eslint-disable-line
+
+
   useEffect(() => { accountsApi.list({ limit: 200 }).then(setAccounts) }, [])
   useEffect(() => { usersApi.list().then(setUsers).catch(() => {}) }, [])
   useEffect(() => { settingsApi.getCurrencies().then(setCurrencies).catch(() => {}) }, [])
   useEffect(() => { settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {}) }, [])
 
-  const applyFilters = () => { setPage(1); fetch(1) }
+  const handleWorkflowSelect = (id) => {
+    setSelectedWorkflowId(id)
+    setStageFilter('')
+    setPage(1)
+    const wf = workflows.find(w => w.id === id)
+    if (wf) setWorkflowStages(wf.stages || [])
+  }
+
+  const applyFilters = () => { setPage(1); fetch(1, selectedWorkflowId) }
   const hasFilter = search || stageFilter || typeFilter || dateFrom || dateTo
   const clearFilters = () => {
     setSearch(''); setStageFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo('')
-    setPage(1); fetch(1)
+    setPage(1); fetch(1, selectedWorkflowId)
   }
 
   const handleApplySavedView = (filters) => {
@@ -85,12 +112,16 @@ export default function Deals() {
     if (filters.type !== undefined) setTypeFilter(filters.type || '')
     if (filters.dateFrom !== undefined) setDateFrom(filters.dateFrom || '')
     if (filters.dateTo !== undefined) setDateTo(filters.dateTo || '')
-    setPage(1); fetch(1)
+    setPage(1); fetch(1, selectedWorkflowId)
   }
 
   const currentFilters = { search, stage: stageFilter, type: typeFilter, dateFrom, dateTo }
 
-  const openFiltered = deals.filter(d => !['lost', 'on_hold'].includes(d.stage))
+  const wonLostKeys = new Set(workflowStages.filter(s => s.is_won || s.is_lost).map(s => s.key))
+  const openFiltered = deals.filter(d => !wonLostKeys.has(d.stage))
+  // When a specific stage filter is active, show all returned deals (incl. won/lost) in kanban
+  const pipelineDeals = stageFilter ? deals : openFiltered
+  const activeStages = workflowStages.filter(s => !s.is_won && !s.is_lost)
 
   const onCreateDeal = async (data) => {
     try {
@@ -98,6 +129,7 @@ export default function Deals() {
       const payload = {
         ...data,
         account_id: Number(data.account_id),
+        workflow_id: data.workflow_id ? Number(data.workflow_id) : selectedWorkflowId,
         value_eur: data.value_eur ? Number(data.value_eur) : null,
         currency: newDealCurrency,
         exchange_rate_eur: currencyRate,
@@ -108,7 +140,7 @@ export default function Deals() {
       toast.success('Deal created!')
       reset()
       setShowNew(false)
-      fetch(page)
+      fetch(page, selectedWorkflowId)
       navigate(`/deals/${deal.id}`)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error creating deal')
@@ -119,10 +151,12 @@ export default function Deals() {
     setDeals(ds => ds.map(d => d.id === dealId ? { ...d, stage: newStage } : d))
     try {
       await dealsApi.changeStage(dealId, { stage: newStage })
-      toast.success(`Moved to ${t(`deals.stages.${newStage}`, newStage)}`)
+      const stageObj = workflowStages.find(s => s.key === newStage)
+      const label = stageObj ? stageLabel(stageObj) : t(`deals.stages.${newStage}`, newStage)
+      toast.success(`Moved to ${label}`)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to update stage')
-      fetch(page)
+      fetch(page, selectedWorkflowId)
     }
   }
 
@@ -158,6 +192,29 @@ export default function Deals() {
         </div>
       </div>
 
+      {/* Workflow tabs — always shown so users know which workflow is active */}
+      {workflows.length > 0 && (
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+          {workflows.map(wf => (
+            <button
+              key={wf.id}
+              onClick={() => handleWorkflowSelect(wf.id)}
+              className={clsx(
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                selectedWorkflowId === wf.id
+                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              )}
+            >
+              {wf.name}
+              {wf.is_default && workflows.length > 1 && (
+                <span className="ml-1.5 text-xs text-gray-400">(default)</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -172,7 +229,9 @@ export default function Deals() {
         </div>
         <select className="input-field text-sm py-1.5 w-44" value={stageFilter} onChange={e => setStageFilter(e.target.value)}>
           <option value="">All stages</option>
-          {ALL_STAGES.map(s => <option key={s} value={s}>{t(`deals.stages.${s}`, s)}</option>)}
+          {workflowStages.map(s => (
+            <option key={s.key} value={s.key}>{stageLabel(s)}</option>
+          ))}
         </select>
         <select className="input-field text-sm py-1.5 w-32" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
@@ -199,7 +258,16 @@ export default function Deals() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">New Deal</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">New Deal</h2>
+                {workflows.length > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Workflow: <span className="font-medium text-brand-600 dark:text-brand-400">
+                      {workflows.find(w => w.id === selectedWorkflowId)?.name ?? '—'}
+                    </span>
+                  </p>
+                )}
+              </div>
               <button onClick={() => { setShowNew(false); reset() }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                 <XMarkIcon className="w-5 h-5 text-gray-400" />
               </button>
@@ -216,6 +284,16 @@ export default function Deals() {
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               </div>
+              {workflows.length > 1 && (
+                <div>
+                  <label className="label">Workflow</label>
+                  <select className="input-field w-full" {...register('workflow_id')} defaultValue={selectedWorkflowId}>
+                    {workflows.map(wf => (
+                      <option key={wf.id} value={wf.id}>{wf.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Type</label>
@@ -228,8 +306,8 @@ export default function Deals() {
                 <div>
                   <label className="label">Stage</label>
                   <select className="input-field w-full" {...register('stage')}>
-                    {ALL_STAGES.slice(0, 12).map(s => (
-                      <option key={s} value={s}>{t(`deals.stages.${s}`, s)}</option>
+                    {activeStages.map(s => (
+                      <option key={s.key} value={s.key}>{stageLabel(s)}</option>
                     ))}
                   </select>
                 </div>
@@ -305,7 +383,7 @@ export default function Deals() {
 
       {bulk.hasSelection && dealViewMode === 'list' && (
         <BulkActionBar count={bulk.count} entityType="deals" selectedIds={bulk.selectedIds}
-          onClear={bulk.clearSelection} onDone={() => fetch(page)}
+          onClear={bulk.clearSelection} onDone={() => fetch(page, selectedWorkflowId)}
           canAssign users={users} />
       )}
 
@@ -314,7 +392,7 @@ export default function Deals() {
         <div className="flex items-center justify-center h-64 text-gray-400">{t('common.loading')}</div>
       ) : dealViewMode === 'kanban' ? (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 overflow-x-auto">
-          <Pipeline deals={openFiltered} onStageChange={handleStageChange} />
+          <Pipeline deals={pipelineDeals} stages={workflowStages} onStageChange={handleStageChange} />
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -343,13 +421,18 @@ export default function Deals() {
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-white cursor-pointer" onClick={() => navigate(`/deals/${deal.id}`)}>{deal.title}</td>
                   <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/deals/${deal.id}`)}>
-                    <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
-                      deal.stage === 'deal_closed_won' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                      deal.stage === 'lost' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
-                      'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                    )}>
-                      {t(`deals.stages.${deal.stage}`, deal.stage)}
-                    </span>
+                    {(() => {
+                      const s = workflowStages.find(st => st.key === deal.stage)
+                      return (
+                        <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
+                          s?.is_won ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                          s?.is_lost ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        )}>
+                          {s ? stageLabel(s) : t(`deals.stages.${deal.stage}`, deal.stage)}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {deal.value_eur

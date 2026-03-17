@@ -3,14 +3,16 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # System deps for WeasyPrint and psycopg2
+# Note: libgdk-pixbuf2.0-0 removed — WeasyPrint 62+ uses Pillow for images
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
     libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
+    libcairo2 \
     libffi-dev \
+    libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

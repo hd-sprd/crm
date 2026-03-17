@@ -20,19 +20,6 @@ import AttachmentGallery from '../components/AttachmentGallery'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
-const ALL_STAGES = [
-  'lead_received', 'lead_qualification', 'account_created', 'needs_assessment',
-  'feasibility_check', 'quote_preparation', 'quote_sent', 'negotiation',
-  'order_confirmed', 'order_created_erp', 'artwork_approval', 'production_planning',
-  'in_production', 'quality_check', 'shipped', 'invoice_created',
-  'payment_received', 'deal_closed_won', 'lost', 'on_hold',
-]
-
-const STAGE_COLORS = {
-  deal_closed_won: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  lost: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  on_hold: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-}
 
 const ACTIVITY_TYPES = ['call', 'email', 'note', 'whatsapp', 'meeting']
 const TYPE_ICONS = {
@@ -49,7 +36,7 @@ const TYPE_COLORS_BG = {
 
 export default function DealDetail() {
   const { id } = useParams()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [deal, setDeal] = useState(null)
   const [quotes, setQuotes] = useState([])
@@ -67,6 +54,10 @@ export default function DealDetail() {
   const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const [customFieldValues, setCustomFieldValues] = useState({})
+  const [workflowStages, setWorkflowStages] = useState([])
+
+  const stageLabel = (s) => i18n.language === 'de' ? s.label_de : s.label_en
+  const getStageObj = (key) => workflowStages.find(s => s.key === key)
 
   const loadActivities = () =>
     activitiesApi.list({ related_to_type: 'deal', related_to_id: Number(id), limit: 100 })
@@ -77,7 +68,15 @@ export default function DealDetail() {
       dealsApi.get(id),
       quotesApi.list({ deal_id: id }),
     ])
-      .then(([d, q]) => { setDeal(d); setQuotes(q) })
+      .then(([d, q]) => {
+        setDeal(d)
+        setQuotes(q)
+        if (d.workflow_id) {
+          settingsApi.getWorkflow(d.workflow_id)
+            .then(wf => setWorkflowStages(wf.stages || []))
+            .catch(() => {})
+        }
+      })
       .finally(() => setLoading(false))
 
   useEffect(() => {
@@ -180,7 +179,12 @@ export default function DealDetail() {
 
   if (!deal) return <div className="text-gray-500">Deal not found</div>
 
-  const stageColor = STAGE_COLORS[deal.stage] || 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+  const stageObj = getStageObj(deal.stage)
+  const stageColor = stageObj?.is_won
+    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+    : stageObj?.is_lost
+    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -193,7 +197,7 @@ export default function DealDetail() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{deal.title}</h1>
           <div className="flex items-center gap-3 mt-1">
             <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', stageColor)}>
-              {t(`deals.stages.${deal.stage}`, deal.stage)}
+              {stageObj ? stageLabel(stageObj) : t(`deals.stages.${deal.stage}`, deal.stage)}
             </span>
             <span className="text-sm text-gray-500 dark:text-gray-400 capitalize">{deal.type}</span>
           </div>
@@ -516,7 +520,9 @@ export default function DealDetail() {
                 <div>
                   <label className="label">Stage</label>
                   <select className="input-field w-full" value={editData.stage} onChange={e => set('stage', e.target.value)}>
-                    {ALL_STAGES.map(s => <option key={s} value={s}>{t(`deals.stages.${s}`, s)}</option>)}
+                    {workflowStages.map(s => (
+                      <option key={s.key} value={s.key}>{stageLabel(s)}</option>
+                    ))}
                   </select>
                 </div>
               </div>

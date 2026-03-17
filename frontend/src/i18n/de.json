@@ -282,7 +282,7 @@
   },
   "settings": {
     "title": "Systemeinstellungen",
-    "pipeline": "Pipeline-Phasen",
+    "workflows": "Workflows",
     "customFields": "Benutzerdefinierte Felder",
     "addStage": "Phase hinzufügen",
     "addField": "Feld hinzufügen",

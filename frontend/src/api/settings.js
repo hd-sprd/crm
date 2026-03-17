@@ -1,12 +1,17 @@
 import client from './client'
 
 export const settingsApi = {
-  // Pipeline stages
-  listStages: () => client.get('/settings/pipeline-stages').then(r => r.data),
-  createStage: (data) => client.post('/settings/pipeline-stages', data).then(r => r.data),
-  updateStage: (id, data) => client.patch(`/settings/pipeline-stages/${id}`, data).then(r => r.data),
-  deleteStage: (id) => client.delete(`/settings/pipeline-stages/${id}`),
-  reorderStages: (order) => client.post('/settings/pipeline-stages/reorder', order).then(r => r.data),
+  // Workflows
+  listWorkflows: () => client.get('/settings/workflows').then(r => r.data),
+  getWorkflow: (id) => client.get(`/settings/workflows/${id}`).then(r => r.data),
+  createWorkflow: (data) => client.post('/settings/workflows', data).then(r => r.data),
+  updateWorkflow: (id, data) => client.patch(`/settings/workflows/${id}`, data).then(r => r.data),
+  deleteWorkflow: (id) => client.delete(`/settings/workflows/${id}`),
+  listWorkflowStages: (workflowId) => client.get(`/settings/workflows/${workflowId}/stages`).then(r => r.data),
+  createWorkflowStage: (workflowId, data) => client.post(`/settings/workflows/${workflowId}/stages`, data).then(r => r.data),
+  updateWorkflowStage: (stageId, data) => client.patch(`/settings/workflow-stages/${stageId}`, data).then(r => r.data),
+  deleteWorkflowStage: (stageId) => client.delete(`/settings/workflow-stages/${stageId}`),
+  reorderWorkflowStages: (workflowId, order) => client.post(`/settings/workflows/${workflowId}/stages/reorder`, order).then(r => r.data),
 
   // Custom fields
   listCustomFields: (appliesTo) =>

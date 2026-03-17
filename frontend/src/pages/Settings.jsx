@@ -27,51 +27,22 @@ import DuplicatesTab from './DuplicatesTab'
 const COLORS = ['gray','slate','red','orange','amber','yellow','lime','green','teal','cyan','sky','blue','indigo','violet','purple','pink']
 const FIELD_TYPES = ['text', 'number', 'date', 'select', 'checkbox']
 const APPLIES_TO = ['deal', 'lead', 'contact', 'account', 'quote']
-const TABS = ['pipeline', 'customFields', 'currencies', 'quoteTemplate', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
+const TABS = ['workflows', 'customFields', 'currencies', 'quoteTemplate', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
 
-// ── Sortable Stage Row ──────────────────────────────────────────────────────
+// ── Workflows Tab ─────────────────────────────────────────────────────────────
 
-function SortableStageRow({ stage, onEdit, onDelete }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id })
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+const GATE_LABELS = [
+  ['requires_quote', 'Requires Quote'],
+  ['requires_approved_quote', 'Requires Approved Quote'],
+  ['requires_feasibility', 'Requires Feasibility Check'],
+  ['requires_artwork', 'Requires Artwork Approval'],
+  ['requires_invoice', 'Requires Invoice Ref'],
+]
 
-  return (
-    <div ref={setNodeRef} style={style} className={clsx(
-      'flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg',
-      isDragging && 'shadow-lg ring-2 ring-brand-400'
-    )}>
-      <button {...attributes} {...listeners} className="cursor-grab text-gray-400 hover:text-gray-600">
-        <Bars3Icon className="w-4 h-4" />
-      </button>
-
-      <span className={clsx('w-3 h-3 rounded-full flex-shrink-0', `bg-${stage.color}-500`)} />
-
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{stage.label_en}</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{stage.label_de}</p>
-      </div>
-
-      <div className="flex gap-1.5">
-        {stage.is_won && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Won</span>}
-        {stage.is_lost && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Lost</span>}
-      </div>
-
-      <div className="flex gap-1">
-        <button onClick={() => onEdit(stage)} className="p-1.5 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
-          <PencilIcon className="w-4 h-4" />
-        </button>
-        <button onClick={() => onDelete(stage.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
-          <TrashIcon className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Stage Form ────────────────────────────────────────────────────────────────
-
-function StageForm({ initial, onSave, onCancel }) {
-  const [form, setForm] = useState(initial || { key: '', label_en: '', label_de: '', color: 'blue', is_won: false, is_lost: false })
+function StageFormInline({ initial, isNew, onSave, onCancel }) {
+  const blank = { key: '', label_en: '', label_de: '', color: 'blue', is_won: false, is_lost: false,
+    requires_quote: false, requires_approved_quote: false, requires_feasibility: false, requires_artwork: false, requires_invoice: false }
+  const [form, setForm] = useState(initial || blank)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   return (
@@ -79,49 +50,41 @@ function StageForm({ initial, onSave, onCancel }) {
       className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-600"
     >
       <div className="grid grid-cols-2 gap-3">
-        {!initial && (
+        {isNew && (
           <div className="col-span-2">
-            <label className="label">Stage Key (no spaces, e.g. custom_review)</label>
-            <input className="input-field w-full" value={form.key} onChange={e => set('key', e.target.value.replace(/\s/g, '_').toLowerCase())} placeholder="custom_stage" />
+            <label className="label">Stage Key (e.g. custom_review)</label>
+            <input className="input-field w-full" value={form.key}
+              onChange={e => set('key', e.target.value.replace(/\s/g, '_').toLowerCase())} placeholder="stage_key" />
           </div>
         )}
-        <div>
-          <label className="label">Label (EN)</label>
-          <input className="input-field w-full" value={form.label_en} onChange={e => set('label_en', e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Label (DE)</label>
-          <input className="input-field w-full" value={form.label_de} onChange={e => set('label_de', e.target.value)} />
-        </div>
+        <div><label className="label">Label EN</label>
+          <input className="input-field w-full" value={form.label_en} onChange={e => set('label_en', e.target.value)} /></div>
+        <div><label className="label">Label DE</label>
+          <input className="input-field w-full" value={form.label_de} onChange={e => set('label_de', e.target.value)} /></div>
       </div>
-
       <div>
         <label className="label">Color</label>
         <div className="flex flex-wrap gap-1.5 mt-1">
           {COLORS.map(c => (
-            <button key={c} onClick={() => set('color', c)}
-              className={clsx('w-6 h-6 rounded-full transition-transform hover:scale-110', `bg-${c}-500`, form.color === c && 'ring-2 ring-offset-2 ring-gray-800 dark:ring-gray-200')}
-            />
+            <button key={c} type="button" onClick={() => set('color', c)}
+              className={clsx('w-5 h-5 rounded-full transition-transform hover:scale-110', `bg-${c}-500`,
+                form.color === c && 'ring-2 ring-offset-2 ring-gray-800 dark:ring-gray-200')} />
           ))}
         </div>
       </div>
-
-      <div className="flex gap-4">
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={form.is_won} onChange={e => set('is_won', e.target.checked)} className="rounded" />
-          <span className="text-gray-700 dark:text-gray-300">Marks as Won</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={form.is_lost} onChange={e => set('is_lost', e.target.checked)} className="rounded" />
-          <span className="text-gray-700 dark:text-gray-300">Marks as Lost</span>
-        </label>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+        {[['is_won', 'Marks as Won'], ['is_lost', 'Marks as Lost'], ...GATE_LABELS].map(([k, lbl]) => (
+          <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={!!form[k]} onChange={e => set(k, e.target.checked)} className="rounded" />
+            <span className="text-gray-700 dark:text-gray-300">{lbl}</span>
+          </label>
+        ))}
       </div>
-
       <div className="flex gap-2 justify-end">
-        <button onClick={onCancel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
+        <button type="button" onClick={onCancel} className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-1.5">
           <XMarkIcon className="w-4 h-4" /> Cancel
         </button>
-        <button onClick={() => onSave(form)} className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5">
+        <button type="button" onClick={() => onSave(form)} className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5">
           <CheckIcon className="w-4 h-4" /> Save
         </button>
       </div>
@@ -129,9 +92,350 @@ function StageForm({ initial, onSave, onCancel }) {
   )
 }
 
+function SortableStageRow({ stage, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stage.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+  return (
+    <div ref={setNodeRef} style={style} className={clsx(
+      'flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg',
+      isDragging && 'shadow-lg ring-2 ring-brand-400'
+    )}>
+      <button {...attributes} {...listeners} className="cursor-grab text-gray-400 hover:text-gray-600">
+        <Bars3Icon className="w-4 h-4" />
+      </button>
+      <span className={clsx('w-2.5 h-2.5 rounded-full flex-shrink-0', `bg-${stage.color}-500`)} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{stage.label_en}</p>
+        <p className="text-xs text-gray-400 truncate">{stage.key}</p>
+      </div>
+      <div className="flex gap-1">
+        {stage.is_won && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Won</span>}
+        {stage.is_lost && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Lost</span>}
+        {stage.requires_quote && <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Q</span>}
+        {stage.requires_feasibility && <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">F</span>}
+        {stage.requires_artwork && <span className="text-xs px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">A</span>}
+      </div>
+      <button onClick={() => onEdit(stage)} className="p-1.5 text-gray-400 hover:text-brand-600 transition-colors">
+        <PencilIcon className="w-3.5 h-3.5" />
+      </button>
+      <button onClick={() => onDelete(stage.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
+        <TrashIcon className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function WorkflowCard({ workflow, onUpdate, onDelete, onStagesChange }) {
+  const [expanded, setExpanded] = useState(workflow.is_default)
+  const [stages, setStages] = useState(workflow.stages || [])
+  const [editingStage, setEditingStage] = useState(null)
+  const [showNewStage, setShowNewStage] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameForm, setNameForm] = useState({ name: workflow.name, description: workflow.description || '', quote_approval_target_stage: workflow.quote_approval_target_stage || '' })
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return
+    const oldIdx = stages.findIndex(s => s.id === active.id)
+    const newIdx = stages.findIndex(s => s.id === over.id)
+    const reordered = arrayMove(stages, oldIdx, newIdx).map((s, i) => ({ ...s, stage_order: i }))
+    setStages(reordered)
+    try {
+      await settingsApi.reorderWorkflowStages(workflow.id, reordered.map(s => ({ id: s.id, stage_order: s.stage_order })))
+    } catch { toast.error('Failed to reorder') }
+  }
+
+  const handleSaveStage = async (form) => {
+    try {
+      if (editingStage) {
+        const updated = await settingsApi.updateWorkflowStage(editingStage.id, form)
+        setStages(s => s.map(x => x.id === updated.id ? updated : x))
+        setEditingStage(null)
+        toast.success('Stage updated')
+      } else {
+        const created = await settingsApi.createWorkflowStage(workflow.id, { ...form, stage_order: stages.length })
+        setStages(s => [...s, created])
+        setShowNewStage(false)
+        toast.success('Stage created')
+      }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error') }
+  }
+
+  const handleDeleteStage = async (id) => {
+    if (!confirm('Delete this stage?')) return
+    await settingsApi.deleteWorkflowStage(id)
+    setStages(s => s.filter(x => x.id !== id))
+    toast.success('Stage deleted')
+  }
+
+  const handleSaveName = async () => {
+    try {
+      const updated = await settingsApi.updateWorkflow(workflow.id, {
+        name: nameForm.name,
+        description: nameForm.description || null,
+        quote_approval_target_stage: nameForm.quote_approval_target_stage || null,
+      })
+      onUpdate(updated)
+      setEditingName(false)
+      toast.success('Workflow updated')
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error') }
+  }
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+      {/* Workflow header */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-700/50">
+        <button onClick={() => setExpanded(e => !e)} className="flex-1 flex items-center gap-2 text-left">
+          <span className={clsx('transition-transform', expanded ? 'rotate-90' : '')}>▶</span>
+          <span className="font-semibold text-gray-900 dark:text-white">{workflow.name}</span>
+          {workflow.is_default && <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">Default</span>}
+          <span className="text-xs text-gray-400">({stages.length} stages)</span>
+        </button>
+        <button onClick={() => setEditingName(e => !e)} className="p-1.5 text-gray-400 hover:text-brand-600 transition-colors">
+          <PencilIcon className="w-4 h-4" />
+        </button>
+        {!workflow.is_default && (
+          <button onClick={() => onDelete(workflow.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Edit workflow settings */}
+      <AnimatePresence>
+        {editingName && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 space-y-3"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">Workflow Name</label>
+                <input className="input-field w-full" value={nameForm.name} onChange={e => setNameForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><label className="label">Description (optional)</label>
+                <input className="input-field w-full" value={nameForm.description} onChange={e => setNameForm(f => ({ ...f, description: e.target.value }))} /></div>
+            </div>
+            <div>
+              <label className="label">Quote Approval → advance deal to stage</label>
+              <select className="input-field w-full" value={nameForm.quote_approval_target_stage}
+                onChange={e => setNameForm(f => ({ ...f, quote_approval_target_stage: e.target.value }))}>
+                <option value="">— No auto-advance —</option>
+                {stages.filter(s => !s.is_lost).map(s => <option key={s.key} value={s.key}>{s.label_en}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setEditingName(false)} className="btn-secondary text-sm px-3 py-1.5">Cancel</button>
+              <button onClick={handleSaveName} className="btn-primary text-sm px-3 py-1.5">Save</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Stages */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="p-4 space-y-2 bg-white dark:bg-gray-800"
+          >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                {stages.map(stage => (
+                  editingStage?.id === stage.id ? (
+                    <StageFormInline key={`edit-${stage.id}`} initial={stage} isNew={false}
+                      onSave={handleSaveStage} onCancel={() => setEditingStage(null)} />
+                  ) : (
+                    <SortableStageRow key={stage.id} stage={stage}
+                      onEdit={(s) => { setEditingStage(s); setShowNewStage(false) }}
+                      onDelete={handleDeleteStage}
+                    />
+                  )
+                ))}
+              </SortableContext>
+            </DndContext>
+
+            <AnimatePresence>
+              {showNewStage && (
+                <StageFormInline key="new-stage" isNew
+                  onSave={handleSaveStage} onCancel={() => setShowNewStage(false)} />
+              )}
+            </AnimatePresence>
+
+            <button onClick={() => { setShowNewStage(true); setEditingStage(null) }}
+              className="w-full text-sm text-brand-600 dark:text-brand-400 hover:text-brand-800 dark:hover:text-brand-200 flex items-center gap-1.5 py-1.5 transition-colors">
+              <PlusIcon className="w-4 h-4" /> Add Stage
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function WorkflowsTab() {
+  const [workflows, setWorkflows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
+  const [showNew, setShowNew] = useState(false)
+  const [newForm, setNewForm] = useState({ name: '', description: '' })
+
+  useEffect(() => { loadWorkflows() }, [])
+
+  const loadWorkflows = async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const wfs = await settingsApi.listWorkflows()
+      setWorkflows(wfs)
+    } catch (e) {
+      const detail = e.response?.data?.detail || e.message || 'Unknown error'
+      setLoadError(detail)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!newForm.name.trim()) { toast.error('Workflow name is required'); return }
+    try {
+      const wf = await settingsApi.createWorkflow(newForm)
+      setWorkflows(ws => [...ws, wf])
+      setShowNew(false)
+      setNewForm({ name: '', description: '' })
+      toast.success('Workflow created')
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error creating workflow') }
+  }
+
+  const handleUpdate = (updated) => {
+    setWorkflows(ws => ws.map(w => w.id === updated.id ? { ...w, ...updated } : w))
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this workflow and all its stages? Deals in this workflow will keep their stage key but lose workflow context.')) return
+    try {
+      await settingsApi.deleteWorkflow(id)
+      setWorkflows(ws => ws.filter(w => w.id !== id))
+      toast.success('Workflow deleted')
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error deleting workflow') }
+  }
+
+  if (loading) return <div className="text-gray-400 text-sm py-8 text-center">Loading workflows…</div>
+
+  if (loadError) return (
+    <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-5 space-y-2">
+      <p className="text-sm font-medium text-red-700 dark:text-red-400">Could not load workflows</p>
+      <p className="text-xs text-red-600 dark:text-red-500 font-mono">{loadError}</p>
+      <p className="text-xs text-red-500 dark:text-red-400">Make sure <code className="font-mono bg-red-100 dark:bg-red-900 px-1 rounded">alembic upgrade head</code> has been run to apply the v10 workflows migration.</p>
+      <button onClick={loadWorkflows} className="btn-secondary text-sm px-3 py-1.5 mt-1">Retry</button>
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Each deal runs through one workflow. The Default workflow preserves all existing stages.
+        </p>
+        <button onClick={() => setShowNew(f => !f)} className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5">
+          <PlusIcon className="w-4 h-4" /> New Workflow
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showNew && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-600"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">Workflow Name</label>
+                <input className="input-field w-full" value={newForm.name}
+                  onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Simple Sales" /></div>
+              <div><label className="label">Description (optional)</label>
+                <input className="input-field w-full" value={newForm.description}
+                  onChange={e => setNewForm(f => ({ ...f, description: e.target.value }))} /></div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowNew(false)} className="btn-secondary text-sm px-3 py-1.5">Cancel</button>
+              <button onClick={handleCreate} className="btn-primary text-sm px-3 py-1.5">Create</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {workflows.length === 0 && !showNew && (
+        <div className="text-center py-10 text-gray-400 text-sm">
+          No workflows found. The default workflow is created automatically when you run <code className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded">alembic upgrade head</code>.
+        </div>
+      )}
+
+      {workflows.map(wf => (
+        <WorkflowCard key={wf.id} workflow={wf} onUpdate={handleUpdate} onDelete={handleDelete} />
+      ))}
+    </div>
+  )
+}
+
 // ── Custom Field Row ──────────────────────────────────────────────────────────
 
-function CustomFieldRow({ field, onDelete }) {
+function CustomFieldRow({ field, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ label_en: field.label_en, label_de: field.label_de, is_required: field.is_required, options: field.options?.join(', ') || '' })
+
+  const handleSave = async () => {
+    try {
+      const payload = {
+        label_en: form.label_en,
+        label_de: form.label_de,
+        is_required: form.is_required,
+        ...(field.field_type === 'select' ? { options: form.options.split(',').map(s => s.trim()).filter(Boolean) } : {}),
+      }
+      const updated = await settingsApi.updateCustomField(field.id, payload)
+      onUpdate(updated)
+      setEditing(false)
+      toast.success('Field updated')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error updating field')
+    }
+  }
+
+  if (editing) {
+    return (
+      <motion.div layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+        className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2"
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Label EN</label>
+            <input className="input-field w-full text-sm" value={form.label_en}
+              onChange={e => setForm(f => ({ ...f, label_en: e.target.value }))} />
+          </div>
+          <div>
+            <label className="label">Label DE</label>
+            <input className="input-field w-full text-sm" value={form.label_de}
+              onChange={e => setForm(f => ({ ...f, label_de: e.target.value }))} />
+          </div>
+        </div>
+        {field.field_type === 'select' && (
+          <div>
+            <label className="label">Options (comma-separated)</label>
+            <input className="input-field w-full text-sm" value={form.options}
+              onChange={e => setForm(f => ({ ...f, options: e.target.value }))} placeholder="Option 1, Option 2" />
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.is_required}
+            onChange={e => setForm(f => ({ ...f, is_required: e.target.checked }))} className="rounded" />
+          <span className="text-gray-700 dark:text-gray-300">Required field</span>
+        </label>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setEditing(false)} className="btn-secondary text-sm px-3 py-1.5">Cancel</button>
+          <button onClick={handleSave} className="btn-primary text-sm px-3 py-1.5">Save</button>
+        </div>
+      </motion.div>
+    )
+  }
+
   return (
     <motion.div layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
       className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg"
@@ -144,6 +448,9 @@ function CustomFieldRow({ field, onDelete }) {
           {field.options?.length ? ` · options: ${field.options.join(', ')}` : ''}
         </p>
       </div>
+      <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-brand-600 transition-colors">
+        <PencilIcon className="w-4 h-4" />
+      </button>
       <button onClick={() => onDelete(field.id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
         <TrashIcon className="w-4 h-4" />
       </button>
@@ -156,67 +463,22 @@ function CustomFieldRow({ field, onDelete }) {
 export default function Settings() {
   const { t, i18n } = useTranslation()
 
-  const [tab, setTab] = useState('pipeline')
-  const [stages, setStages] = useState([])
+  const [tab, setTab] = useState('workflows')
   const [customFields, setCustomFields] = useState([])
-  const [showStageForm, setShowStageForm] = useState(false)
-  const [editingStage, setEditingStage] = useState(null)
   const [showFieldForm, setShowFieldForm] = useState(false)
   const [fieldForm, setFieldForm] = useState({ name: '', label_en: '', label_de: '', field_type: 'text', applies_to: 'deal', is_required: false, options: '' })
   const [loading, setLoading] = useState(true)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
 
   useEffect(() => { loadAll() }, [])
 
   const loadAll = async () => {
     setLoading(true)
     try {
-      const [s, cf] = await Promise.all([settingsApi.listStages(), settingsApi.listCustomFields()])
-      setStages(s)
+      const cf = await settingsApi.listCustomFields()
       setCustomFields(cf)
     } finally {
       setLoading(false)
     }
-  }
-
-  // Pipeline stage handlers
-  const handleDragEnd = async ({ active, over }) => {
-    if (!over || active.id === over.id) return
-    const oldIdx = stages.findIndex(s => s.id === active.id)
-    const newIdx = stages.findIndex(s => s.id === over.id)
-    const reordered = arrayMove(stages, oldIdx, newIdx).map((s, i) => ({ ...s, stage_order: i }))
-    setStages(reordered)
-    await settingsApi.reorderStages(reordered.map(s => ({ id: s.id, stage_order: s.stage_order })))
-    toast.success('Order saved')
-  }
-
-  const handleSaveStage = async (form) => {
-    try {
-      if (editingStage) {
-        const updated = await settingsApi.updateStage(editingStage.id, form)
-        setStages(s => s.map(x => x.id === updated.id ? updated : x))
-        toast.success('Stage updated')
-      } else {
-        const created = await settingsApi.createStage({ ...form, stage_order: stages.length })
-        setStages(s => [...s, created])
-        toast.success('Stage created')
-      }
-      setShowStageForm(false)
-      setEditingStage(null)
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Error saving stage')
-    }
-  }
-
-  const handleDeleteStage = async (id) => {
-    if (!confirm('Delete this stage?')) return
-    await settingsApi.deleteStage(id)
-    setStages(s => s.filter(x => x.id !== id))
-    toast.success('Stage deleted')
   }
 
   // Custom field handlers
@@ -236,6 +498,10 @@ export default function Settings() {
     }
   }
 
+  const handleUpdateField = (updated) => {
+    setCustomFields(cf => cf.map(x => x.id === updated.id ? updated : x))
+  }
+
   const handleDeleteField = async (id) => {
     if (!confirm('Delete this custom field?')) return
     await settingsApi.deleteCustomField(id)
@@ -244,7 +510,7 @@ export default function Settings() {
   }
 
   const tabLabel = (t) => ({
-    pipeline: <><SwatchIcon className="w-4 h-4 inline mr-1.5" />Pipeline Stages</>,
+    workflows: <><SwatchIcon className="w-4 h-4 inline mr-1.5" />Workflows</>,
     customFields: <><TableCellsIcon className="w-4 h-4 inline mr-1.5" />Custom Fields</>,
     quoteTemplate: <><DocumentTextIcon className="w-4 h-4 inline mr-1.5" />Quote Template</>,
     import: <><ArrowUpTrayIcon className="w-4 h-4 inline mr-1.5" />Import</>,
@@ -280,44 +546,10 @@ export default function Settings() {
       </div>
 
       <AnimatePresence mode="wait">
-        {/* Pipeline Stages Tab */}
-        {tab === 'pipeline' && (
-          <motion.div key="pipeline" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Drag to reorder. Changes affect all deal pipeline views.
-              </p>
-              <button onClick={() => { setEditingStage(null); setShowStageForm(true) }}
-                className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5">
-                <PlusIcon className="w-4 h-4" /> Add Stage
-              </button>
-            </div>
-
-            <AnimatePresence>
-              {showStageForm && !editingStage && (
-                <StageForm key="new-form" onSave={handleSaveStage} onCancel={() => setShowStageForm(false)} />
-              )}
-            </AnimatePresence>
-
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={stages.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {stages.map(stage => (
-                    editingStage?.id === stage.id ? (
-                      <StageForm key={`edit-${stage.id}`} initial={stage} onSave={handleSaveStage}
-                        onCancel={() => setEditingStage(null)} />
-                    ) : (
-                      <SortableStageRow key={stage.id} stage={stage}
-                        onEdit={(s) => { setEditingStage(s); setShowStageForm(false) }}
-                        onDelete={handleDeleteStage}
-                      />
-                    )
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+        {/* Workflows Tab */}
+        {tab === 'workflows' && (
+          <motion.div key="workflows" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            <WorkflowsTab />
           </motion.div>
         )}
 
@@ -394,14 +626,14 @@ export default function Settings() {
               )}
             </AnimatePresence>
 
-            {['deal', 'lead', 'contact'].map(entity => {
+            {APPLIES_TO.map(entity => {
               const fields = customFields.filter(f => f.applies_to === entity)
               if (!fields.length) return null
               return (
                 <div key={entity}>
                   <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 capitalize">{entity}s</h3>
                   <div className="space-y-2">
-                    {fields.map(f => <CustomFieldRow key={f.id} field={f} onDelete={handleDeleteField} />)}
+                    {fields.map(f => <CustomFieldRow key={f.id} field={f} onUpdate={handleUpdateField} onDelete={handleDeleteField} />)}
                   </div>
                 </div>
               )

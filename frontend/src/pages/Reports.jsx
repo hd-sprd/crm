@@ -6,6 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import clsx from 'clsx'
 
 const PIE_COLORS = ['#e63329','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4']
 
@@ -20,7 +21,7 @@ function KpiCard({ label, value, sub, color = 'brand' }) {
 }
 
 export default function Reports() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [pipeline, setPipeline] = useState({})
   const [leadsData, setLeadsData] = useState({})
   const [performance, setPerformance] = useState([])
@@ -29,14 +30,19 @@ export default function Reports() {
   const [loading, setLoading] = useState(true)
   const [currencyConfig, setCurrencyConfig] = useState({ base_currency: 'EUR', currencies: { EUR: { symbol: '€' } } })
 
+  const [workflows, setWorkflows] = useState([])
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState(null)
+  const [workflowStages, setWorkflowStages] = useState([])
+
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
-  const load = useCallback((from, to) => {
+  const load = useCallback((from, to, workflowId) => {
     setLoading(true)
     const params = {}
     if (from) params.date_from = from
     if (to) params.date_to = to + 'T23:59:59'
+    if (workflowId) params.workflow_id = workflowId
     Promise.all([
       reportsApi.pipeline(params),
       reportsApi.leads(params),
@@ -54,13 +60,44 @@ export default function Reports() {
     }).finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load('', '') }, [load])
+  // Load workflows on mount
+  useEffect(() => {
+    settingsApi.listWorkflows().then(wfs => {
+      setWorkflows(wfs)
+      const def = wfs.find(w => w.is_default) || wfs[0]
+      if (def) {
+        setSelectedWorkflowId(def.id)
+        setWorkflowStages(def.stages || [])
+      } else {
+        load('', '', null)
+      }
+    }).catch(() => load('', '', null))
+  }, []) // eslint-disable-line
 
-  const applyFilters = () => load(dateFrom, dateTo)
-  const clearFilters = () => { setDateFrom(''); setDateTo(''); load('', '') }
+  // Load report data when workflow changes
+  useEffect(() => {
+    if (selectedWorkflowId !== null) {
+      load(dateFrom, dateTo, selectedWorkflowId)
+    }
+  }, [selectedWorkflowId]) // eslint-disable-line
+
+  const applyFilters = () => load(dateFrom, dateTo, selectedWorkflowId)
+  const clearFilters = () => { setDateFrom(''); setDateTo(''); load('', '', selectedWorkflowId) }
+
+  const handleWorkflowSelect = (id) => {
+    setSelectedWorkflowId(id)
+    const wf = workflows.find(w => w.id === id)
+    if (wf) setWorkflowStages(wf.stages || [])
+  }
+
+  const getStageLabel = (key) => {
+    const s = workflowStages.find(st => st.key === key)
+    if (s) return i18n.language === 'de' ? s.label_de : s.label_en
+    return t(`deals.stages.${key}`, { defaultValue: key })
+  }
 
   const pipelineData = Object.entries(pipeline).map(([stage, data]) => ({
-    name: t(`deals.stages.${stage}`, { defaultValue: stage }),
+    name: getStageLabel(stage),
     count: data.count,
     value: data.total_value_eur,
   }))
@@ -97,6 +134,29 @@ export default function Reports() {
           )}
         </div>
       </div>
+
+      {/* Workflow tabs */}
+      {workflows.length > 0 && (
+        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+          {workflows.map(wf => (
+            <button
+              key={wf.id}
+              onClick={() => handleWorkflowSelect(wf.id)}
+              className={clsx(
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                selectedWorkflowId === wf.id
+                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              )}
+            >
+              {wf.name}
+              {wf.is_default && workflows.length > 1 && (
+                <span className="ml-1.5 text-xs text-gray-400">(default)</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* KPI Summary */}
       {summary && (

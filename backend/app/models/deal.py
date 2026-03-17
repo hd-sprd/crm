@@ -74,6 +74,7 @@ class Deal(Base):
     lost_reason: Mapped[str | None] = mapped_column(Text)
     jira_ticket_id: Mapped[str | None] = mapped_column(String(100))
     custom_fields: Mapped[dict | None] = mapped_column(JSON)
+    workflow_id: Mapped[int | None] = mapped_column(ForeignKey("workflows.id"), index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -89,3 +90,4 @@ class Deal(Base):
     assigned_user: Mapped["User | None"] = relationship("User", back_populates="deals")  # type: ignore[name-defined]
     quotes: Mapped[list["Quote"]] = relationship("Quote", back_populates="deal", foreign_keys="Quote.deal_id")  # type: ignore[name-defined]
     active_quote: Mapped["Quote | None"] = relationship("Quote", foreign_keys=[quote_id], primaryjoin="Deal.quote_id == Quote.id")  # type: ignore[name-defined]
+    workflow: Mapped["Workflow | None"] = relationship("Workflow", lazy="joined")  # type: ignore[name-defined]

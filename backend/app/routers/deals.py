@@ -6,18 +6,19 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.deal import Deal, DealStage, DealType
+from app.models.deal import Deal, DealType
 from app.models.user import User
 from app.schemas.deal import DealCreate, DealUpdate, DealOut, DealStageChange
 from app.services.auth_service import get_current_user
-from app.services.deal_service import validate_stage_transition
+from app.services.deal_service import validate_stage_transition, get_default_workflow_id, get_first_stage_key
 
 router = APIRouter(prefix="/deals", tags=["deals"])
 
 
 @router.get("", response_model=list[DealOut])
 async def list_deals(
-    stage: Optional[DealStage] = None,
+    stage: Optional[str] = None,
+    workflow_id: Optional[int] = None,
     assigned_to: Optional[int] = None,
     account_id: Optional[int] = None,
     type: Optional[DealType] = None,
@@ -32,6 +33,8 @@ async def list_deals(
     q = select(Deal)
     if stage:
         q = q.where(Deal.stage == stage)
+    if workflow_id:
+        q = q.where(Deal.workflow_id == workflow_id)
     if assigned_to:
         q = q.where(Deal.assigned_to == assigned_to)
     if account_id:
@@ -55,7 +58,15 @@ async def create_deal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    deal = Deal(**payload.model_dump())
+    data = payload.model_dump()
+    # Resolve workflow_id – fall back to default workflow
+    if not data.get("workflow_id"):
+        data["workflow_id"] = await get_default_workflow_id(db)
+    # Set initial stage to first stage of the workflow (unless explicitly provided)
+    if not data.get("stage") or data["stage"] == "lead_received":
+        if data.get("workflow_id"):
+            data["stage"] = await get_first_stage_key(data["workflow_id"], db)
+    deal = Deal(**data)
     if not deal.assigned_to:
         deal.assigned_to = current_user.id
     db.add(deal)

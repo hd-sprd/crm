@@ -22,6 +22,7 @@ class DealCreate(BaseModel):
     expected_close_date: Optional[date] = None
     jira_ticket_id: Optional[str] = None
     custom_fields: Optional[dict[str, Any]] = None
+    workflow_id: Optional[int] = None
 
 
 class DealUpdate(BaseModel):
@@ -82,6 +83,7 @@ class DealOut(BaseModel):
     lost_reason: Optional[str]
     jira_ticket_id: Optional[str]
     custom_fields: Optional[dict[str, Any]]
+    workflow_id: Optional[int]
     created_at: datetime
     updated_at: datetime
 

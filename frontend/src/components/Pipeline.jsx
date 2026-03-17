@@ -8,35 +8,25 @@ import {
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
-const STAGE_COLORS = {
-  lead_received: 'bg-gray-100 dark:bg-gray-700',
-  lead_qualification: 'bg-blue-50 dark:bg-blue-900/20',
-  account_created: 'bg-blue-100 dark:bg-blue-900/30',
-  needs_assessment: 'bg-indigo-50 dark:bg-indigo-900/20',
-  feasibility_check: 'bg-purple-50 dark:bg-purple-900/20',
-  quote_preparation: 'bg-yellow-50 dark:bg-yellow-900/20',
-  quote_sent: 'bg-yellow-100 dark:bg-yellow-900/30',
-  negotiation: 'bg-orange-50 dark:bg-orange-900/20',
-  order_confirmed: 'bg-green-50 dark:bg-green-900/20',
-  order_created_erp: 'bg-green-100 dark:bg-green-900/30',
-  artwork_approval: 'bg-teal-50 dark:bg-teal-900/20',
-  production_planning: 'bg-teal-100 dark:bg-teal-900/30',
-  in_production: 'bg-cyan-50 dark:bg-cyan-900/20',
-  quality_check: 'bg-sky-50 dark:bg-sky-900/20',
-  shipped: 'bg-lime-50 dark:bg-lime-900/20',
-  invoice_created: 'bg-emerald-50 dark:bg-emerald-900/20',
-  payment_received: 'bg-emerald-100 dark:bg-emerald-900/30',
-  deal_closed_won: 'bg-green-200 dark:bg-green-900/50',
-  lost: 'bg-red-50 dark:bg-red-900/20',
-  on_hold: 'bg-gray-200 dark:bg-gray-600/30',
+// Map stage color names to Tailwind bg classes
+const COLOR_MAP = {
+  gray:   'bg-gray-100 dark:bg-gray-700',
+  slate:  'bg-slate-100 dark:bg-slate-700/50',
+  red:    'bg-red-50 dark:bg-red-900/20',
+  orange: 'bg-orange-50 dark:bg-orange-900/20',
+  amber:  'bg-amber-50 dark:bg-amber-900/20',
+  yellow: 'bg-yellow-50 dark:bg-yellow-900/20',
+  lime:   'bg-lime-50 dark:bg-lime-900/20',
+  green:  'bg-green-50 dark:bg-green-900/20',
+  teal:   'bg-teal-50 dark:bg-teal-900/20',
+  cyan:   'bg-cyan-50 dark:bg-cyan-900/20',
+  sky:    'bg-sky-50 dark:bg-sky-900/20',
+  blue:   'bg-blue-50 dark:bg-blue-900/20',
+  indigo: 'bg-indigo-50 dark:bg-indigo-900/20',
+  violet: 'bg-violet-50 dark:bg-violet-900/20',
+  purple: 'bg-purple-50 dark:bg-purple-900/20',
+  pink:   'bg-pink-50 dark:bg-pink-900/20',
 }
-
-const KANBAN_STAGES = [
-  'lead_received', 'lead_qualification', 'needs_assessment',
-  'feasibility_check', 'quote_preparation', 'quote_sent',
-  'negotiation', 'order_confirmed', 'artwork_approval',
-  'in_production', 'shipped', 'invoice_created', 'deal_closed_won',
-]
 
 function CardContent({ deal }) {
   return (
@@ -87,11 +77,10 @@ function DraggableCard({ deal, isActive }) {
   )
 }
 
-function DroppableColumn({ stage, children, label, count, colorClass }) {
-  const { isOver, setNodeRef } = useDroppable({ id: stage })
+function DroppableColumn({ stageKey, children, label, count, colorClass }) {
+  const { isOver, setNodeRef } = useDroppable({ id: stageKey })
   return (
     <div className="flex items-start gap-2">
-      {/* Stage label – fixed width on the left */}
       <div className={clsx(
         'w-44 flex-shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200 leading-tight',
         colorClass,
@@ -99,7 +88,6 @@ function DroppableColumn({ stage, children, label, count, colorClass }) {
         <span className="block truncate">{label}</span>
         <span className="text-gray-400 font-normal">{count} deal{count !== 1 ? 's' : ''}</span>
       </div>
-      {/* Drop zone – cards wrap horizontally */}
       <div
         ref={setNodeRef}
         className={clsx(
@@ -113,18 +101,19 @@ function DroppableColumn({ stage, children, label, count, colorClass }) {
   )
 }
 
-export default function Pipeline({ deals = [], onStageChange }) {
-  const { t } = useTranslation()
+// stages: array of WorkflowStage objects {key, label_en, label_de, color, is_won, is_lost, stage_order, ...}
+export default function Pipeline({ deals = [], stages = [], onStageChange }) {
+  const { i18n } = useTranslation()
   const [activeId, setActiveId] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  const byStage = KANBAN_STAGES.reduce((acc, stage) => {
-    acc[stage] = deals.filter(d => d.stage === stage)
-    return acc
-  }, {})
+  // Show regular stages always; show won/lost stages only when deals are present in them (e.g. active stage filter)
+  const displayStages = stages.filter(s =>
+    s.is_active !== false && (!s.is_won && !s.is_lost || deals.some(d => d.stage === s.key))
+  )
 
   const activeDeal = activeId ? deals.find(d => d.id === activeId) : null
 
@@ -138,6 +127,13 @@ export default function Pipeline({ deals = [], onStageChange }) {
     }
   }
 
+  const getLabel = (stage) => i18n.language === 'de' ? stage.label_de : stage.label_en
+  const getColor = (stage) => COLOR_MAP[stage.color] || COLOR_MAP.gray
+
+  if (displayStages.length === 0) {
+    return <p className="text-gray-400 text-sm text-center py-8">No stages configured for this workflow.</p>
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -146,15 +142,15 @@ export default function Pipeline({ deals = [], onStageChange }) {
       onDragCancel={() => setActiveId(null)}
     >
       <div className="space-y-1.5">
-        {KANBAN_STAGES.map(stage => (
+        {displayStages.map(stage => (
           <DroppableColumn
-            key={stage}
-            stage={stage}
-            label={t(`deals.stages.${stage}`)}
-            count={byStage[stage].length}
-            colorClass={STAGE_COLORS[stage]}
+            key={stage.key}
+            stageKey={stage.key}
+            label={getLabel(stage)}
+            count={deals.filter(d => d.stage === stage.key).length}
+            colorClass={getColor(stage)}
           >
-            {byStage[stage].map(deal => (
+            {deals.filter(d => d.stage === stage.key).map(deal => (
               <DraggableCard key={deal.id} deal={deal} isActive={deal.id === activeId} />
             ))}
           </DroppableColumn>

@@ -1,23 +1,27 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from datetime import datetime, timezone
 
-from app.models.deal import Deal, DealStage, STAGE_ORDER
+from app.models.deal import Deal
 from app.models.lead import Lead, LeadStatus
 from app.models.activity import Activity
 from app.models.user import User
+from app.models.workflow import WorkflowStage
 
 
 async def get_pipeline_report(
     db: AsyncSession,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    workflow_id: int | None = None,
 ) -> dict:
     q = select(
         Deal.stage,
         func.count(Deal.id),
         func.sum(Deal.value_eur * Deal.exchange_rate_eur),
     ).group_by(Deal.stage)
+    if workflow_id:
+        q = q.where(Deal.workflow_id == workflow_id)
     if date_from:
         q = q.where(Deal.created_at >= date_from)
     if date_to:
@@ -50,19 +54,33 @@ async def get_performance_report(
     user_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    workflow_id: int | None = None,
 ) -> dict:
-    # Base query: join with user to get full_name
     q = select(
         Deal.assigned_to,
         User.full_name,
-        func.count(Deal.id).filter(Deal.stage == DealStage.deal_closed_won).label("won"),
-        func.count(Deal.id).filter(Deal.stage == DealStage.lost).label("lost"),
-        func.count(Deal.id).filter(Deal.stage.notin_([DealStage.deal_closed_won, DealStage.lost])).label("open"),
-        func.sum(Deal.value_eur * Deal.exchange_rate_eur).filter(Deal.stage == DealStage.deal_closed_won).label("won_value"),
+        func.count(Deal.id).filter(WorkflowStage.is_won.is_(True)).label("won"),
+        func.count(Deal.id).filter(WorkflowStage.is_lost.is_(True)).label("lost"),
+        func.count(Deal.id).filter(
+            WorkflowStage.is_won.is_not(True),
+            WorkflowStage.is_lost.is_not(True),
+        ).label("open"),
         func.sum(Deal.value_eur * Deal.exchange_rate_eur).filter(
-            Deal.stage.notin_([DealStage.deal_closed_won, DealStage.lost])
+            WorkflowStage.is_won.is_(True)
+        ).label("won_value"),
+        func.sum(Deal.value_eur * Deal.exchange_rate_eur).filter(
+            WorkflowStage.is_won.is_not(True),
+            WorkflowStage.is_lost.is_not(True),
         ).label("pipeline_value"),
-    ).outerjoin(User, User.id == Deal.assigned_to).group_by(Deal.assigned_to, User.full_name)
+    ).outerjoin(User, User.id == Deal.assigned_to).outerjoin(
+        WorkflowStage,
+        and_(
+            WorkflowStage.workflow_id == Deal.workflow_id,
+            WorkflowStage.key == Deal.stage,
+        ),
+    ).group_by(Deal.assigned_to, User.full_name)
+    if workflow_id:
+        q = q.where(Deal.workflow_id == workflow_id)
     if user_id:
         q = q.where(Deal.assigned_to == user_id)
     if date_from:
@@ -91,19 +109,29 @@ async def get_summary_report(
     db: AsyncSession,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    workflow_id: int | None = None,
 ) -> dict:
     """Overall KPI summary stats."""
     deal_q = select(
         func.count(Deal.id).label("total_deals"),
-        func.count(Deal.id).filter(Deal.stage == DealStage.deal_closed_won).label("won_deals"),
-        func.count(Deal.id).filter(Deal.stage == DealStage.lost).label("lost_deals"),
+        func.count(Deal.id).filter(WorkflowStage.is_won.is_(True)).label("won_deals"),
+        func.count(Deal.id).filter(WorkflowStage.is_lost.is_(True)).label("lost_deals"),
         func.sum(Deal.value_eur * Deal.exchange_rate_eur).filter(
-            Deal.stage.notin_([DealStage.deal_closed_won, DealStage.lost])
+            WorkflowStage.is_won.is_not(True),
+            WorkflowStage.is_lost.is_not(True),
         ).label("pipeline_value"),
         func.sum(Deal.value_eur * Deal.exchange_rate_eur).filter(
-            Deal.stage == DealStage.deal_closed_won
+            WorkflowStage.is_won.is_(True)
         ).label("won_value"),
+    ).outerjoin(
+        WorkflowStage,
+        and_(
+            WorkflowStage.workflow_id == Deal.workflow_id,
+            WorkflowStage.key == Deal.stage,
+        ),
     )
+    if workflow_id:
+        deal_q = deal_q.where(Deal.workflow_id == workflow_id)
     if date_from:
         deal_q = deal_q.where(Deal.created_at >= date_from)
     if date_to:

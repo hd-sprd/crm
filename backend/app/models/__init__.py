@@ -9,9 +9,10 @@ from app.models.task import Task
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
 from app.models.saved_view import SavedView
+from app.models.workflow import Workflow, WorkflowStage
 
 __all__ = [
     "User", "Account", "Contact", "Lead",
     "Deal", "Quote", "Activity", "Task", "AuditLog",
-    "Notification", "SavedView",
+    "Notification", "SavedView", "Workflow", "WorkflowStage",
 ]

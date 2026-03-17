@@ -8,7 +8,8 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.models.lead import Lead, LeadStatus
-from app.models.deal import Deal, DealStage
+from app.models.deal import Deal
+from app.models.workflow import WorkflowStage
 from app.models.task import Task, TaskPriority, TaskStatus, RelatedToType
 from app.models.quote import Quote, QuoteStatus
 from app.models.activity import Activity
@@ -60,13 +61,19 @@ async def rule_lead_followup_reminder(db: AsyncSession) -> None:
 async def rule_inactive_deal_alert(db: AsyncSession) -> None:
     """Create alert task if deal has not been updated in N days."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=settings.INACTIVE_DEAL_DAYS)
-    result = await db.execute(
-        select(Deal).where(
-            Deal.stage.not_in([DealStage.lost, DealStage.on_hold, DealStage.deal_closed_won]),
-            Deal.updated_at <= cutoff,
+    # Exclude deals whose stage is is_won or is_lost in their workflow
+    done_stages = await db.execute(
+        select(WorkflowStage.key, WorkflowStage.workflow_id).where(
+            (WorkflowStage.is_won == True) | (WorkflowStage.is_lost == True)
         )
     )
-    deals = result.scalars().all()
+    done_pairs = {(r[1], r[0]) for r in done_stages.all()}  # (workflow_id, key)
+
+    result = await db.execute(
+        select(Deal).where(Deal.updated_at <= cutoff)
+    )
+    all_deals = result.scalars().all()
+    deals = [d for d in all_deals if (d.workflow_id, d.stage) not in done_pairs]
     for deal in deals:
         existing = await db.execute(
             select(Task).where(
@@ -92,7 +99,7 @@ async def rule_inactive_deal_alert(db: AsyncSession) -> None:
 
 
 async def rule_quote_accepted_advance_deal(db: AsyncSession) -> None:
-    """When quote is accepted, advance deal to Order Confirmed (stage 9)."""
+    """When quote is accepted, advance deal to the workflow's quote_approval_target_stage."""
     result = await db.execute(
         select(Quote).where(
             Quote.status == QuoteStatus.accepted,
@@ -103,11 +110,28 @@ async def rule_quote_accepted_advance_deal(db: AsyncSession) -> None:
     for quote in quotes:
         deal_result = await db.execute(select(Deal).where(Deal.id == quote.deal_id))
         deal = deal_result.scalar_one_or_none()
-        if deal and deal.stage not in (
-            DealStage.order_confirmed, DealStage.order_created_erp,
-            DealStage.deal_closed_won, DealStage.lost, DealStage.on_hold,
-        ):
-            deal.stage = DealStage.order_confirmed
+        if not deal or not deal.workflow:
+            continue
+        target_key = deal.workflow.quote_approval_target_stage
+        if not target_key:
+            continue
+        # Only advance if deal is not already at/past the target stage
+        current_s = await db.execute(
+            select(WorkflowStage).where(
+                WorkflowStage.workflow_id == deal.workflow_id,
+                WorkflowStage.key == deal.stage,
+            )
+        )
+        target_s = await db.execute(
+            select(WorkflowStage).where(
+                WorkflowStage.workflow_id == deal.workflow_id,
+                WorkflowStage.key == target_key,
+            )
+        )
+        current_stage = current_s.scalar_one_or_none()
+        target_stage = target_s.scalar_one_or_none()
+        if current_stage and target_stage and current_stage.stage_order < target_stage.stage_order:
+            deal.stage = target_key
     await db.flush()
 
 
