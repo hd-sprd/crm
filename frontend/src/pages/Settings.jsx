@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import { settingsApi } from '../api/settings'
+import { sequencesApi } from '../api/sequences'
 import client from '../api/client'
 import QuoteTemplateEditor from '../components/QuoteTemplateEditor'
 import ImportTab from './Import'
@@ -27,7 +28,7 @@ import DuplicatesTab from './DuplicatesTab'
 const COLORS = ['gray','slate','red','orange','amber','yellow','lime','green','teal','cyan','sky','blue','indigo','violet','purple','pink']
 const FIELD_TYPES = ['text', 'number', 'date', 'select', 'checkbox']
 const APPLIES_TO = ['deal', 'lead', 'contact', 'account', 'quote']
-const TABS = ['workflows', 'customFields', 'currencies', 'quoteTemplate', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
+const TABS = ['workflows', 'customFields', 'currencies', 'quoteTemplate', 'sequences', 'import', 'export', 'duplicates', 'gdpr', 'auditLog', 'api']
 
 // ── Workflows Tab ─────────────────────────────────────────────────────────────
 
@@ -525,7 +526,7 @@ export default function Settings() {
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>
 
   return (
-    <div className={clsx('space-y-6', tab === 'quoteTemplate' ? 'max-w-6xl' : 'max-w-4xl', (tab === 'import' || tab === 'export') && 'max-w-3xl', (tab === 'duplicates' || tab === 'auditLog') && 'max-w-5xl')}>
+    <div className={clsx('space-y-6', tab === 'quoteTemplate' ? 'max-w-6xl' : 'max-w-4xl', (tab === 'import' || tab === 'export') && 'max-w-3xl', (tab === 'duplicates' || tab === 'auditLog' || tab === 'sequences') && 'max-w-5xl')}>
       <div className="flex items-center gap-3">
         <Cog6ToothIcon className="w-7 h-7 text-brand-600" />
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
@@ -694,6 +695,13 @@ export default function Settings() {
         {tab === 'auditLog' && (
           <motion.div key="auditLog" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
             <AuditLogTab />
+          </motion.div>
+        )}
+
+        {/* Sequences Tab */}
+        {tab === 'sequences' && (
+          <motion.div key="sequences" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}>
+            <SequencesTab />
           </motion.div>
         )}
 
@@ -925,6 +933,214 @@ function CurrenciesTab() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+
+// ── Sequences Tab ─────────────────────────────────────────────────────────────
+
+const ACTION_TYPES = ['task', 'note']
+
+function SequencesTab() {
+  const [sequences, setSequences] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(null)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', description: '', applies_to: 'deal', is_active: true })
+  const [saving, setSaving] = useState(false)
+  // Step editing
+  const [stepForms, setStepForms] = useState({}) // seqId → {step_order, delay_days, action_type, title, body}
+  const blankStep = { step_order: 1, delay_days: 0, action_type: 'task', title: '', body: '' }
+
+  const load = () => {
+    setLoading(true)
+    sequencesApi.list().then(setSequences).catch(() => {}).finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const createSequence = async () => {
+    if (!form.name.trim()) return
+    setSaving(true)
+    try {
+      await sequencesApi.create(form)
+      toast.success('Sequence created')
+      setShowForm(false)
+      setForm({ name: '', description: '', applies_to: 'deal', is_active: true })
+      load()
+    } catch { toast.error('Error creating sequence') } finally { setSaving(false) }
+  }
+
+  const deleteSequence = async (id) => {
+    if (!confirm('Delete this sequence?')) return
+    try {
+      await sequencesApi.delete(id)
+      toast.success('Deleted')
+      load()
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error') }
+  }
+
+  const toggleActive = async (seq) => {
+    await sequencesApi.update(seq.id, { is_active: !seq.is_active })
+    load()
+  }
+
+  const addStep = async (seqId) => {
+    const sf = stepForms[seqId] || blankStep
+    if (!sf.title.trim()) return
+    try {
+      await sequencesApi.addStep(seqId, sf)
+      setStepForms(f => ({ ...f, [seqId]: blankStep }))
+      load()
+    } catch { toast.error('Error adding step') }
+  }
+
+  const deleteStep = async (stepId) => {
+    await sequencesApi.deleteStep(stepId)
+    load()
+  }
+
+  const sf = (seqId) => stepForms[seqId] || blankStep
+  const setSf = (seqId, k, v) => setStepForms(f => ({ ...f, [seqId]: { ...(f[seqId] || blankStep), [k]: v } }))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Follow-Up Sequences</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Automate task and note creation at scheduled intervals</p>
+        </div>
+        <button onClick={() => setShowForm(s => !s)} className="btn-primary flex items-center gap-2 text-sm">
+          <PlusIcon className="w-4 h-4" /> New Sequence
+        </button>
+      </div>
+
+      {/* Create form */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-3 border border-gray-200 dark:border-gray-600"
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="label">Name *</label>
+                <input className="input-field w-full" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. New Lead Follow-up" />
+              </div>
+              <div>
+                <label className="label">Applies To</label>
+                <select className="input-field w-full" value={form.applies_to} onChange={e => setForm(f => ({ ...f, applies_to: e.target.value }))}>
+                  <option value="deal">Deal</option>
+                  <option value="lead">Lead</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Description</label>
+                <input className="input-field w-full" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={createSequence} disabled={saving || !form.name.trim()} className="btn-primary disabled:opacity-50">
+                {saving ? 'Creating…' : 'Create'}
+              </button>
+              <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><div className="animate-spin w-6 h-6 border-4 border-brand-600 border-t-transparent rounded-full" /></div>
+      ) : sequences.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No sequences yet. Create one to get started.</p>
+      ) : (
+        <div className="space-y-3">
+          {sequences.map(seq => (
+            <div key={seq.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              {/* Sequence header */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <button onClick={() => setExpanded(e => e === seq.id ? null : seq.id)}
+                  className="flex-1 flex items-center gap-3 text-left min-w-0"
+                >
+                  <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', seq.is_active ? 'bg-green-500' : 'bg-gray-400')} />
+                  <div className="min-w-0">
+                    <span className="font-medium text-gray-900 dark:text-white">{seq.name}</span>
+                    <span className="ml-2 text-xs text-gray-400 capitalize">{seq.applies_to}</span>
+                    {seq.description && <p className="text-xs text-gray-400 truncate">{seq.description}</p>}
+                  </div>
+                  <span className="text-xs text-gray-400 ml-auto flex-shrink-0">{seq.steps.length} step{seq.steps.length !== 1 ? 's' : ''}</span>
+                </button>
+                <button onClick={() => toggleActive(seq)} className={clsx('text-xs px-2 py-0.5 rounded border transition-colors', seq.is_active ? 'border-green-300 text-green-600 hover:bg-red-50' : 'border-gray-300 text-gray-500 hover:bg-green-50')}>
+                  {seq.is_active ? 'Active' : 'Inactive'}
+                </button>
+                <button onClick={() => deleteSequence(seq.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Steps panel */}
+              <AnimatePresence>
+                {expanded === seq.id && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-t border-gray-100 dark:border-gray-700"
+                  >
+                    <div className="px-4 py-3 space-y-2">
+                      {seq.steps.length === 0
+                        ? <p className="text-xs text-gray-400 py-2">No steps yet.</p>
+                        : seq.steps.sort((a, b) => a.step_order - b.step_order).map(step => (
+                          <div key={step.id} className="flex items-start gap-3 bg-gray-50 dark:bg-gray-700/40 rounded-lg px-3 py-2 text-sm">
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-600 text-xs flex items-center justify-center font-medium mt-0.5">{step.step_order}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-800 dark:text-gray-200">{step.title}</p>
+                              <p className="text-xs text-gray-400">Day {step.delay_days} · {step.action_type}</p>
+                              {step.body && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{step.body}</p>}
+                            </div>
+                            <button onClick={() => deleteStep(step.id)} className="flex-shrink-0 p-1 text-gray-300 hover:text-red-500 transition-colors">
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))
+                      }
+
+                      {/* Add step inline */}
+                      <div className="border border-dashed border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Add step</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="label text-[10px]">Order</label>
+                            <input type="number" className="input-field w-full py-1 text-xs" value={sf(seq.id).step_order}
+                              onChange={e => setSf(seq.id, 'step_order', Number(e.target.value))} />
+                          </div>
+                          <div>
+                            <label className="label text-[10px]">Day</label>
+                            <input type="number" className="input-field w-full py-1 text-xs" value={sf(seq.id).delay_days}
+                              onChange={e => setSf(seq.id, 'delay_days', Number(e.target.value))} />
+                          </div>
+                          <div>
+                            <label className="label text-[10px]">Type</label>
+                            <select className="input-field w-full py-1 text-xs" value={sf(seq.id).action_type}
+                              onChange={e => setSf(seq.id, 'action_type', e.target.value)}>
+                              {ACTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <input className="input-field w-full py-1 text-xs" placeholder="Title *"
+                          value={sf(seq.id).title} onChange={e => setSf(seq.id, 'title', e.target.value)} />
+                        <textarea rows={2} className="input-field w-full py-1 text-xs" placeholder="Body / notes"
+                          value={sf(seq.id).body} onChange={e => setSf(seq.id, 'body', e.target.value)} />
+                        <button onClick={() => addStep(seq.id)} disabled={!sf(seq.id).title.trim()}
+                          className="btn-primary text-xs py-1 disabled:opacity-50 flex items-center gap-1">
+                          <PlusIcon className="w-3.5 h-3.5" /> Add Step
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

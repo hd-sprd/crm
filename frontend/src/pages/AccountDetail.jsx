@@ -11,6 +11,7 @@ import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
 import ActivityFeed from '../components/ActivityFeed'
 import AttachmentGallery from '../components/AttachmentGallery'
+import AuditLogTab from '../components/AuditLogTab'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -41,6 +42,7 @@ export default function AccountDetail() {
   const [selectedActivity, setSelectedActivity] = useState(null)
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const [customFieldValues, setCustomFieldValues] = useState({})
+  const [historyTab, setHistoryTab] = useState('activity')
 
   useEffect(() => {
     settingsApi.listCustomFields('account').then(setCustomFieldDefs).catch(() => {})
@@ -243,13 +245,26 @@ export default function AccountDetail() {
             }
           </div>
 
-          {/* Activity feed */}
+          {/* Activity feed / Change History */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
-              Contact History
-              {activities.length > 0 && <span className="ml-1 text-xs font-normal text-gray-400 normal-case">({activities.length})</span>}
-            </h2>
-            <ActivityFeed activities={activities} onSelect={setSelectedActivity} />
+            <div className="flex gap-1 mb-3">
+              {[['activity', 'Activity'], ['audit', 'Change History']].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setHistoryTab(key)}
+                  className={clsx(
+                    'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                    historyTab === key
+                      ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                      : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  )}
+                >{label}</button>
+              ))}
+            </div>
+            {historyTab === 'activity'
+              ? <ActivityFeed activities={activities} onSelect={setSelectedActivity} />
+              : <AuditLogTab entityType="account" entityId={Number(id)} />
+            }
           </div>
 
           {/* Attachments */}

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     SUPABASE_URL: Optional[str] = None
     SUPABASE_SERVICE_KEY: Optional[str] = None
 
+    # Cron secret (protects /workflow/trigger-internal)
+    CRON_SECRET: Optional[str] = None
+
     # PDF / Branding
     COMPANY_NAME: str = "Spreadshirt"
     COMPANY_LOGO_URL: Optional[str] = None

@@ -13,6 +13,8 @@ from app.models.workflow import WorkflowStage
 from app.models.task import Task, TaskPriority, TaskStatus, RelatedToType
 from app.models.quote import Quote, QuoteStatus
 from app.models.activity import Activity
+from app.models.sequence import SequenceEnrollment, SequenceStep
+from app.routers.notifications import create_notification
 
 
 async def run_all_rules(db: AsyncSession) -> None:
@@ -21,6 +23,7 @@ async def run_all_rules(db: AsyncSession) -> None:
     await rule_inactive_deal_alert(db)
     await rule_quote_accepted_advance_deal(db)
     await rule_overdue_task_check(db)
+    await rule_process_sequence_steps(db)
 
 
 async def rule_lead_followup_reminder(db: AsyncSession) -> None:
@@ -55,6 +58,11 @@ async def rule_lead_followup_reminder(db: AsyncSession) -> None:
             is_auto_generated=True,
         )
         db.add(task)
+        if lead.assigned_to:
+            await create_notification(db, user_id=lead.assigned_to, type="lead_followup",
+                                      title=f"Follow-up needed: {lead.contact_name or lead.company_name or f'Lead #{lead.id}'}",
+                                      body=f"No contact in {settings.LEAD_FOLLOWUP_DAYS}+ days",
+                                      entity_type="lead", entity_id=lead.id)
     await db.flush()
 
 
@@ -95,6 +103,11 @@ async def rule_inactive_deal_alert(db: AsyncSession) -> None:
             is_auto_generated=True,
         )
         db.add(task)
+        if deal.assigned_to:
+            await create_notification(db, user_id=deal.assigned_to, type="deal_stale",
+                                      title=f"Deal stale: {deal.title}",
+                                      body=f"No activity for {settings.INACTIVE_DEAL_DAYS}+ days",
+                                      entity_type="deal", entity_id=deal.id)
     await db.flush()
 
 
@@ -135,6 +148,63 @@ async def rule_quote_accepted_advance_deal(db: AsyncSession) -> None:
     await db.flush()
 
 
+async def rule_process_sequence_steps(db: AsyncSession) -> None:
+    """Process due sequence enrollment steps and create tasks/activities."""
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(SequenceEnrollment)
+        .options(selectinload(SequenceEnrollment.sequence).selectinload("steps"))
+        .where(
+            SequenceEnrollment.completed_at.is_(None),
+            SequenceEnrollment.paused.is_(False),
+        )
+    )
+    enrollments = result.scalars().all()
+    today = datetime.now(timezone.utc).date()
+
+    for enrollment in enrollments:
+        steps = sorted(enrollment.sequence.steps, key=lambda s: s.step_order)
+        if enrollment.current_step >= len(steps):
+            enrollment.completed_at = datetime.now(timezone.utc)
+            continue
+
+        # Check if the current step's cumulative delay has elapsed
+        cumulative_days = sum(s.delay_days for s in steps[:enrollment.current_step + 1])
+        due_date = (enrollment.enrolled_at.date() + timedelta(days=cumulative_days))
+        if due_date > today:
+            continue
+
+        step = steps[enrollment.current_step]
+        if step.action_type == "task":
+            related_type = RelatedToType.deal if enrollment.entity_type == "deal" else RelatedToType.lead
+            task = Task(
+                title=step.title,
+                description=step.body,
+                related_to_type=related_type,
+                related_to_id=enrollment.entity_id,
+                due_date=today,
+                priority=TaskPriority.medium,
+                is_auto_generated=True,
+            )
+            db.add(task)
+        else:
+            # note → Activity
+            activity = Activity(
+                type="note",
+                subject=step.title,
+                body=step.body,
+                related_to_type=enrollment.entity_type,
+                related_to_id=enrollment.entity_id,
+            )
+            db.add(activity)
+
+        enrollment.current_step += 1
+        if enrollment.current_step >= len(steps):
+            enrollment.completed_at = datetime.now(timezone.utc)
+
+    await db.flush()
+
+
 async def rule_overdue_task_check(db: AsyncSession) -> None:
     """Log overdue tasks (could notify manager via separate notification system)."""
     today = date.today()
@@ -150,4 +220,9 @@ async def rule_overdue_task_check(db: AsyncSession) -> None:
     for task in overdue_tasks:
         if task.priority != TaskPriority.high:
             task.priority = TaskPriority.high
+            if task.assigned_to:
+                await create_notification(db, user_id=task.assigned_to, type="task_overdue",
+                                          title=f"Task overdue: {task.title}",
+                                          body=f"Due {task.due_date}",
+                                          entity_type="task", entity_id=task.id)
     await db.flush()

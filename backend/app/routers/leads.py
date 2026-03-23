@@ -15,6 +15,7 @@ from app.schemas.lead import LeadCreate, LeadUpdate, LeadOut, LeadConvert
 from app.schemas.deal import DealOut
 from app.services.auth_service import get_current_user
 from app.routers.notifications import create_notification
+from app.routers.audit_log import log_event, AuditAction
 
 router = APIRouter(prefix="/leads", tags=["leads"])
 
@@ -66,6 +67,8 @@ async def create_lead(
         lead.assigned_to = current_user.id
     db.add(lead)
     await db.flush()
+    await log_event(db, entity_type="lead", entity_id=lead.id, action=AuditAction.create,
+                    user=current_user, note=f"Created: {lead.company_name or lead.contact_name}")
     return lead
 
 
@@ -94,9 +97,16 @@ async def update_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     old_assignee = lead.assigned_to
+    changes = {}
     for field, value in payload.model_dump(exclude_none=True).items():
+        old_val = getattr(lead, field, None)
+        if old_val != value:
+            changes[field] = [str(old_val) if old_val is not None else None,
+                              str(value) if value is not None else None]
         setattr(lead, field, value)
-    # Notify new assignee if assignment changed
+    if changes:
+        await log_event(db, entity_type="lead", entity_id=lead_id, action=AuditAction.update,
+                        user=current_user, changes=changes)
     if lead.assigned_to and lead.assigned_to != old_assignee and lead.assigned_to != current_user.id:
         await create_notification(
             db,
@@ -169,6 +179,8 @@ async def bulk_leads(
     leads = result.scalars().all()
     if payload.action == "delete":
         for lead in leads:
+            await log_event(db, entity_type="lead", entity_id=lead.id, action=AuditAction.delete,
+                            user=current_user, note=f"Bulk deleted: {lead.company_name or lead.contact_name}")
             await db.delete(lead)
     elif payload.action == "assign":
         if payload.assign_to is None:

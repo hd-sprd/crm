@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { BellIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { notificationsApi } from '../api/notifications'
 import { formatDistanceToNow } from 'date-fns'
@@ -6,13 +7,28 @@ import { formatDistanceToNow } from 'date-fns'
 const TYPE_COLORS = {
   task_assigned: 'bg-blue-500',
   lead_assigned: 'bg-green-500',
+  deal_assigned: 'bg-blue-500',
+  deal_stage_change: 'bg-purple-500',
+  deal_stale: 'bg-orange-500',
+  quote_accepted: 'bg-green-500',
+  task_overdue: 'bg-red-500',
+  lead_followup: 'bg-yellow-500',
   default: 'bg-gray-400',
+}
+
+const ENTITY_ROUTES = {
+  deal: (id) => `/deals/${id}`,
+  lead: () => `/leads`,
+  task: () => `/tasks`,
+  account: (id) => `/accounts/${id}`,
+  contact: (id) => `/contacts/${id}`,
 }
 
 export default function NotificationsPanel() {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState({ unread_count: 0, items: [] })
   const panelRef = useRef(null)
+  const navigate = useNavigate()
 
   const load = () => {
     notificationsApi.list({ limit: 20 })
@@ -91,7 +107,13 @@ export default function NotificationsPanel() {
             {data.items.map(n => (
               <div
                 key={n.id}
-                onClick={() => !n.read_at && handleMarkRead(n.id)}
+                onClick={async () => {
+                  if (!n.read_at) await handleMarkRead(n.id)
+                  if (n.entity_type && n.entity_id) {
+                    const routeFn = ENTITY_ROUTES[n.entity_type]
+                    if (routeFn) { setOpen(false); navigate(routeFn(n.entity_id)) }
+                  }
+                }}
                 className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${!n.read_at ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}
               >
                 <span className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!n.read_at ? (TYPE_COLORS[n.type] || TYPE_COLORS.default) : 'bg-gray-200 dark:bg-gray-600'}`} />

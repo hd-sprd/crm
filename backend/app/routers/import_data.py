@@ -483,36 +483,51 @@ async def export_csv(
     if object_type not in ("accounts", "contacts", "leads", "deals"):
         raise HTTPException(status_code=400, detail="object_type must be one of: accounts, contacts, leads, deals")
 
+    # Load custom field definitions for this entity
+    entity = ENTITY_SINGULAR[object_type]
+    cf_result = await db.execute(
+        select(CustomFieldDef)
+        .where(CustomFieldDef.applies_to == entity, CustomFieldDef.is_active == True)
+        .order_by(CustomFieldDef.field_order)
+    )
+    cf_defs = cf_result.scalars().all()
+    cf_names = [cf.name for cf in cf_defs]       # internal keys stored in custom_fields JSON
+    cf_labels = [cf.label_en for cf in cf_defs]  # human-readable column headers
+
+    def cf_values(entity_obj) -> list:
+        fields = entity_obj.custom_fields or {}
+        return [fields.get(name, "") for name in cf_names]
+
     output = io.StringIO()
     writer = csv.writer(output)
 
     if object_type == "accounts":
-        writer.writerow(["id", "name", "type", "status", "industry", "country", "region", "segment", "website", "address", "notes", "created_at"])
+        writer.writerow(["id", "name", "type", "status", "industry", "country", "region", "segment", "website", "address", "notes", "created_at"] + cf_labels)
         result = await db.execute(select(Account).order_by(Account.name))
         for acc in result.scalars().all():
-            writer.writerow([acc.id, acc.name, acc.type, acc.status, acc.industry, acc.country, acc.region, acc.segment, acc.website, acc.address, acc.notes, acc.created_at])
+            writer.writerow([acc.id, acc.name, acc.type, acc.status, acc.industry, acc.country, acc.region, acc.segment, acc.website, acc.address, acc.notes, acc.created_at] + cf_values(acc))
 
     elif object_type == "contacts":
-        writer.writerow(["id", "first_name", "last_name", "email", "phone", "title", "account_name", "is_primary", "created_at"])
+        writer.writerow(["id", "first_name", "last_name", "email", "phone", "title", "account_name", "is_primary", "created_at"] + cf_labels)
         result = await db.execute(
             select(Contact).options(selectinload(Contact.account)).order_by(Contact.last_name)
         )
         for c in result.scalars().all():
-            writer.writerow([c.id, c.first_name, c.last_name, c.email, c.phone, c.title, c.account.name if c.account else "", c.is_primary, c.created_at])
+            writer.writerow([c.id, c.first_name, c.last_name, c.email, c.phone, c.title, c.account.name if c.account else "", c.is_primary, c.created_at] + cf_values(c))
 
     elif object_type == "leads":
-        writer.writerow(["id", "company_name", "contact_name", "contact_email", "source", "status", "estimated_volume", "timeline", "qualification_notes", "created_at"])
+        writer.writerow(["id", "company_name", "contact_name", "contact_email", "source", "status", "estimated_volume", "timeline", "qualification_notes", "created_at"] + cf_labels)
         result = await db.execute(select(Lead).order_by(Lead.created_at.desc()))
         for lead in result.scalars().all():
-            writer.writerow([lead.id, lead.company_name, lead.contact_name, lead.contact_email, lead.source, lead.status, lead.estimated_volume, lead.timeline, lead.qualification_notes, lead.created_at])
+            writer.writerow([lead.id, lead.company_name, lead.contact_name, lead.contact_email, lead.source, lead.status, lead.estimated_volume, lead.timeline, lead.qualification_notes, lead.created_at] + cf_values(lead))
 
     elif object_type == "deals":
-        writer.writerow(["id", "title", "account_name", "stage", "value_eur", "probability", "expected_close_date", "created_at"])
+        writer.writerow(["id", "title", "account_name", "stage", "value_eur", "probability", "expected_close_date", "created_at"] + cf_labels)
         result = await db.execute(
             select(Deal).options(selectinload(Deal.account)).order_by(Deal.created_at.desc())
         )
         for deal in result.scalars().all():
-            writer.writerow([deal.id, deal.title, deal.account.name if deal.account else "", deal.stage, deal.value_eur, deal.probability, deal.expected_close_date, deal.created_at])
+            writer.writerow([deal.id, deal.title, deal.account.name if deal.account else "", deal.stage, deal.value_eur, deal.probability, deal.expected_close_date, deal.created_at] + cf_values(deal))
 
     csv_content = output.getvalue()
     return StreamingResponse(

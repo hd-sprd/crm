@@ -11,6 +11,8 @@ from app.models.user import User
 from app.schemas.deal import DealCreate, DealUpdate, DealOut, DealStageChange
 from app.services.auth_service import get_current_user
 from app.services.deal_service import validate_stage_transition, get_default_workflow_id, get_first_stage_key
+from app.routers.audit_log import log_event, AuditAction
+from app.routers.notifications import create_notification
 
 router = APIRouter(prefix="/deals", tags=["deals"])
 
@@ -71,6 +73,13 @@ async def create_deal(
         deal.assigned_to = current_user.id
     db.add(deal)
     await db.flush()
+    await log_event(db, entity_type="deal", entity_id=deal.id, action=AuditAction.create,
+                    user=current_user, note=f"Created: {deal.title}")
+    if deal.assigned_to and deal.assigned_to != current_user.id:
+        await create_notification(db, user_id=deal.assigned_to, type="deal_assigned",
+                                  title=f"New deal assigned: {deal.title}",
+                                  body=f"Assigned by {current_user.full_name}",
+                                  entity_type="deal", entity_id=deal.id)
     return deal
 
 
@@ -98,8 +107,22 @@ async def update_deal(
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
+    changes = {}
+    old_assignee = deal.assigned_to
     for field, value in payload.model_dump(exclude_none=True).items():
+        old_val = getattr(deal, field, None)
+        if old_val != value:
+            changes[field] = [str(old_val) if old_val is not None else None,
+                              str(value) if value is not None else None]
         setattr(deal, field, value)
+    if changes:
+        await log_event(db, entity_type="deal", entity_id=deal.id, action=AuditAction.update,
+                        user=current_user, changes=changes)
+    if deal.assigned_to and deal.assigned_to != old_assignee and deal.assigned_to != current_user.id:
+        await create_notification(db, user_id=deal.assigned_to, type="deal_assigned",
+                                  title=f"New deal assigned: {deal.title}",
+                                  body=f"Assigned by {current_user.full_name}",
+                                  entity_type="deal", entity_id=deal.id)
     return deal
 
 
@@ -116,8 +139,16 @@ async def change_stage(
         raise HTTPException(status_code=404, detail="Deal not found")
     if payload.lost_reason:
         deal.lost_reason = payload.lost_reason
+    old_stage = deal.stage
     await validate_stage_transition(deal, payload.stage, db)
     deal.stage = payload.stage
+    await log_event(db, entity_type="deal", entity_id=deal.id, action=AuditAction.update,
+                    user=current_user, changes={"stage": [old_stage, payload.stage]})
+    if deal.assigned_to:
+        await create_notification(db, user_id=deal.assigned_to, type="deal_stage_change",
+                                  title=f"Deal '{deal.title}' moved to {payload.stage}",
+                                  body=f"Changed by {current_user.full_name}",
+                                  entity_type="deal", entity_id=deal.id)
     return deal
 
 
@@ -131,6 +162,8 @@ async def delete_deal(
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
+    await log_event(db, entity_type="deal", entity_id=deal_id, action=AuditAction.delete,
+                    user=current_user, note=f"Deleted: {deal.title}")
     await db.delete(deal)
 
 
@@ -152,11 +185,21 @@ async def bulk_deals(
     deals = result.scalars().all()
     if payload.action == "delete":
         for deal in deals:
+            await log_event(db, entity_type="deal", entity_id=deal.id, action=AuditAction.delete,
+                            user=current_user, note=f"Bulk deleted: {deal.title}")
             await db.delete(deal)
     elif payload.action == "assign":
         if payload.assign_to is None:
             raise HTTPException(status_code=400, detail="assign_to required")
         for deal in deals:
+            old_assignee = deal.assigned_to
             deal.assigned_to = payload.assign_to
+            await log_event(db, entity_type="deal", entity_id=deal.id, action=AuditAction.update,
+                            user=current_user, changes={"assigned_to": [str(old_assignee), str(payload.assign_to)]})
+            if payload.assign_to != current_user.id:
+                await create_notification(db, user_id=payload.assign_to, type="deal_assigned",
+                                          title=f"New deal assigned: {deal.title}",
+                                          body=f"Assigned by {current_user.full_name}",
+                                          entity_type="deal", entity_id=deal.id)
     await db.flush()
     return {"affected": len(deals)}

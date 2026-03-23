@@ -16,8 +16,11 @@ from app.models.user import User
 from app.schemas.quote import QuoteCreate, QuoteUpdate, QuoteOut
 from app.services.auth_service import get_current_user
 from app.services.quote_service import create_quote_version, calculate_total
-from app.reports.pdf_generator import generate_quote_pdf
+from app.reports.pdf_generator import generate_quote_html
+from fastapi.responses import HTMLResponse
 from app.routers.uploads import _auth_from_request, UPLOAD_DIR, MAX_FILE_SIZE, _validate_magic_bytes
+from app.routers.audit_log import log_event, AuditAction
+from app.routers.notifications import create_notification
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
@@ -58,6 +61,8 @@ async def create_quote(
         raise HTTPException(status_code=404, detail=f"Deal #{payload.deal_id} not found")
     quote = await create_quote_version(payload, db)
     deal.quote_id = quote.id
+    await log_event(db, entity_type="quote", entity_id=quote.id, action=AuditAction.create,
+                    user=current_user, note=f"Quote v{quote.version} created for deal #{payload.deal_id}")
     return quote
 
 
@@ -120,6 +125,8 @@ async def send_quote(
     deal = deal_result.scalar_one_or_none()
     if deal and deal.stage == "quote_preparation":
         deal.stage = "quote_sent"
+    await log_event(db, entity_type="quote", entity_id=quote_id, action=AuditAction.update,
+                    user=current_user, changes={"status": ["draft", "sent"]})
     return quote
 
 
@@ -159,6 +166,13 @@ async def accept_quote(
         if current_stage and target_stage and current_stage.stage_order < target_stage.stage_order:
             deal.stage = target_key
 
+    await log_event(db, entity_type="quote", entity_id=quote_id, action=AuditAction.update,
+                    user=current_user, changes={"status": [quote.status.value if hasattr(quote.status, 'value') else str(quote.status), "accepted"]})
+    if deal and deal.assigned_to:
+        await create_notification(db, user_id=deal.assigned_to, type="quote_accepted",
+                                  title=f"Quote accepted for '{deal.title}'",
+                                  body=f"Accepted by {current_user.full_name}",
+                                  entity_type="deal", entity_id=deal.id)
     return quote
 
 
@@ -208,9 +222,5 @@ async def download_quote_pdf(
     quote = result.scalar_one_or_none()
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
-    pdf_bytes = await generate_quote_pdf(quote, db)
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=quote_{quote.id}_v{quote.version}.pdf"},
-    )
+    html = await generate_quote_html(quote, db)
+    return HTMLResponse(content=html)

@@ -9,6 +9,7 @@ from app.models.activity import Activity, ActivityType, RelatedToType
 from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityUpdate, ActivityOut
 from app.services.auth_service import get_current_user
+from app.routers.audit_log import log_event, AuditAction
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -55,6 +56,8 @@ async def create_activity(
     db.add(activity)
     await db.flush()
     await db.refresh(activity, ["assigned_user"])
+    await log_event(db, entity_type="activity", entity_id=activity.id, action=AuditAction.create,
+                    user=current_user, note=f"Created: {activity.subject}")
     return activity
 
 
@@ -84,6 +87,14 @@ async def update_activity(
     activity = result.scalar_one_or_none()
     if not activity:
         raise HTTPException(status_code=404, detail="Activity not found")
+    changes = {}
     for field, value in payload.model_dump(exclude_none=True).items():
+        old_val = getattr(activity, field, None)
+        if old_val != value:
+            changes[field] = [str(old_val) if old_val is not None else None,
+                              str(value) if value is not None else None]
         setattr(activity, field, value)
+    if changes:
+        await log_event(db, entity_type="activity", entity_id=activity_id, action=AuditAction.update,
+                        user=current_user, changes=changes)
     return activity

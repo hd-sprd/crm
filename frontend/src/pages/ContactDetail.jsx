@@ -11,6 +11,7 @@ import { activitiesApi } from '../api/activities'
 import { dealsApi } from '../api/deals'
 import { settingsApi } from '../api/settings'
 import ActivityFeed from '../components/ActivityFeed'
+import AuditLogTab from '../components/AuditLogTab'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -36,6 +37,7 @@ export default function ContactDetail() {
   // History filters
   const [historySearch, setHistorySearch] = useState('')
   const [historyType, setHistoryType] = useState('')
+  const [historyTab, setHistoryTab] = useState('activity')
 
   const load = () =>
     contactsApi.get(id)
@@ -176,45 +178,60 @@ export default function ContactDetail() {
             </div>
           )}
 
-          {/* Activity History */}
+          {/* Activity History / Change History */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                Contact History
-                {activities.length > 0 && <span className="ml-1 text-xs font-normal text-gray-400 normal-case">({filteredActivities.length}/{activities.length})</span>}
-              </h2>
-            </div>
-
-            {/* History filters */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <input
-                  className="input-field pl-8 w-44 text-xs py-1.5"
-                  placeholder="Search history…"
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                />
+              <div className="flex gap-1">
+                {[['activity', 'Activity'], ['audit', 'Change History']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setHistoryTab(key)}
+                    className={clsx(
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      historyTab === key
+                        ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    )}
+                  >{label}</button>
+                ))}
               </div>
-              <select
-                className="input-field text-xs py-1.5 w-32"
-                value={historyType}
-                onChange={e => setHistoryType(e.target.value)}
-              >
-                <option value="">All types</option>
-                {ACTIVITY_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </select>
-              {(historySearch || historyType) && (
-                <button
-                  onClick={() => { setHistorySearch(''); setHistoryType('') }}
-                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center gap-1"
-                >
-                  <XMarkIcon className="w-3.5 h-3.5" /> Clear
-                </button>
-              )}
             </div>
 
-            <ActivityFeed activities={filteredActivities} onSelect={setSelectedActivity} />
+            {historyTab === 'activity' ? (
+              <>
+                {/* History filters */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                    <input
+                      className="input-field pl-8 w-44 text-xs py-1.5"
+                      placeholder="Search history…"
+                      value={historySearch}
+                      onChange={e => setHistorySearch(e.target.value)}
+                    />
+                  </div>
+                  <select
+                    className="input-field text-xs py-1.5 w-32"
+                    value={historyType}
+                    onChange={e => setHistoryType(e.target.value)}
+                  >
+                    <option value="">All types</option>
+                    {ACTIVITY_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                  </select>
+                  {(historySearch || historyType) && (
+                    <button
+                      onClick={() => { setHistorySearch(''); setHistoryType('') }}
+                      className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center gap-1"
+                    >
+                      <XMarkIcon className="w-3.5 h-3.5" /> Clear
+                    </button>
+                  )}
+                </div>
+                <ActivityFeed activities={filteredActivities} onSelect={setSelectedActivity} />
+              </>
+            ) : (
+              <AuditLogTab entityType="contact" entityId={Number(id)} />
+            )}
           </div>
         </div>
 

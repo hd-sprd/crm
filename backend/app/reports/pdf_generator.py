@@ -533,3 +533,13 @@ async def generate_quote_pdf(quote: "Quote", db: AsyncSession) -> bytes:
         return WP_HTML(string=html).write_pdf()
     else:
         return html.encode("utf-8")
+
+
+async def generate_quote_html(quote: "Quote", db: AsyncSession) -> str:
+    """Return a print-ready HTML page for the quote (browser prints via window.print)."""
+    html_bytes = await generate_quote_pdf(quote, db)
+    html = html_bytes.decode("utf-8")
+    return html.replace(
+        "</body>",
+        "<script>window.onload=window.print;window.onafterprint=window.close</script></body>",
+    )

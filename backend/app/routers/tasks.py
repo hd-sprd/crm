@@ -11,6 +11,7 @@ from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate, TaskOut
 from app.services.auth_service import get_current_user
 from app.routers.notifications import create_notification
+from app.routers.audit_log import log_event, AuditAction
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -60,7 +61,8 @@ async def create_task(
         task.assigned_to = current_user.id
     db.add(task)
     await db.flush()
-    # Notify assignee if different from creator
+    await log_event(db, entity_type="task", entity_id=task.id, action=AuditAction.create,
+                    user=current_user, note=f"Created: {task.title}")
     if task.assigned_to and task.assigned_to != current_user.id:
         await create_notification(
             db,
@@ -85,8 +87,16 @@ async def update_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    changes = {}
     for field, value in payload.model_dump(exclude_none=True).items():
+        old_val = getattr(task, field, None)
+        if old_val != value:
+            changes[field] = [str(old_val) if old_val is not None else None,
+                              str(value) if value is not None else None]
         setattr(task, field, value)
+    if changes:
+        await log_event(db, entity_type="task", entity_id=task_id, action=AuditAction.update,
+                        user=current_user, changes=changes)
     return task
 
 

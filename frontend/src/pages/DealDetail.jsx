@@ -13,10 +13,12 @@ import { dealsApi } from '../api/deals'
 import { quotesApi } from '../api/quotes'
 import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
+import { sequencesApi } from '../api/sequences'
 import ActivityFeed from '../components/ActivityFeed'
 import QuoteBuilder from '../components/QuoteBuilder'
 import QuotePreview from '../components/QuotePreview'
 import AttachmentGallery from '../components/AttachmentGallery'
+import AuditLogTab from '../components/AuditLogTab'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
@@ -51,10 +53,15 @@ export default function DealDetail() {
   const [previewQuote, setPreviewQuote] = useState(null)
   const [logData, setLogData] = useState({ type: 'call', subject: '', body: '' })
   const [loggingActivity, setLoggingActivity] = useState(false)
+  const [historyTab, setHistoryTab] = useState('activity')
   const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const [customFieldValues, setCustomFieldValues] = useState({})
   const [workflowStages, setWorkflowStages] = useState([])
+  const [enrollments, setEnrollments] = useState([])
+  const [availableSequences, setAvailableSequences] = useState([])
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrollSeqId, setEnrollSeqId] = useState('')
 
   const stageLabel = (s) => i18n.language === 'de' ? s.label_de : s.label_en
   const getStageObj = (key) => workflowStages.find(s => s.key === key)
@@ -79,12 +86,36 @@ export default function DealDetail() {
       })
       .finally(() => setLoading(false))
 
+  const loadEnrollments = () =>
+    sequencesApi.listEnrollments({ entity_type: 'deal', entity_id: Number(id) })
+      .then(setEnrollments).catch(() => {})
+
   useEffect(() => {
     load()
     loadActivities()
+    loadEnrollments()
     settingsApi.getCurrencies().then(setCurrencies).catch(() => {})
     settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {})
+    sequencesApi.list({ applies_to: 'deal', is_active: true }).then(setAvailableSequences).catch(() => {})
   }, [id])
+
+  const handleEnroll = async () => {
+    if (!enrollSeqId) return
+    setEnrolling(true)
+    try {
+      await sequencesApi.enroll(Number(enrollSeqId), { entity_type: 'deal', entity_id: Number(id) })
+      toast.success('Enrolled in sequence')
+      setEnrollSeqId('')
+      loadEnrollments()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error enrolling')
+    } finally { setEnrolling(false) }
+  }
+
+  const handleUnenroll = async (enrollmentId) => {
+    await sequencesApi.unenroll(enrollmentId)
+    loadEnrollments()
+  }
 
   const openEdit = () => {
     setEditData({
@@ -159,16 +190,8 @@ export default function DealDetail() {
     }
   }
 
-  const handleDownloadPDF = async (quoteId) => {
-    const url = `/api/v1/quotes/${quoteId}/pdf`
-    const token = localStorage.getItem('crm_token')
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-    if (!res.ok) { toast.error('PDF generation failed'); return }
-    const blob = await res.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `quote_${quoteId}.pdf`
-    a.click()
+  const handleDownloadPDF = (quoteId) => {
+    window.open(quotesApi.pdfUrl(quoteId), '_blank')
   }
 
   if (loading) return (
@@ -319,23 +342,85 @@ export default function DealDetail() {
             )}
           </div>
 
-          {/* Contact History */}
+          {/* Sequences */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+              <ClockIcon className="w-4 h-4" /> Sequences
+              {enrollments.length > 0 && <span className="text-xs font-normal text-gray-400 normal-case">({enrollments.length})</span>}
+            </h2>
+            {enrollments.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {enrollments.map(e => {
+                  const total = e.sequence?.steps?.length ?? '?'
+                  return (
+                    <div key={e.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{e.sequence?.name}</span>
+                        <span className="ml-2 text-xs text-gray-400">Step {e.current_step}/{total}</span>
+                        {e.completed_at && <span className="ml-2 text-xs text-green-600">✓ Done</span>}
+                        {e.paused && <span className="ml-2 text-xs text-yellow-600">Paused</span>}
+                      </div>
+                      {!e.completed_at && (
+                        <button onClick={() => handleUnenroll(e.id)} className="text-xs text-red-500 hover:underline">Unenroll</button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {availableSequences.length > 0 && (
+              <div className="flex gap-2">
+                <select
+                  className="input-field flex-1 text-sm"
+                  value={enrollSeqId}
+                  onChange={e => setEnrollSeqId(e.target.value)}
+                >
+                  <option value="">Select sequence to enroll…</option>
+                  {availableSequences.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleEnroll}
+                  disabled={!enrollSeqId || enrolling}
+                  className="btn-primary text-sm disabled:opacity-50"
+                >
+                  {enrolling ? 'Enrolling…' : 'Enroll'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Contact History / Change History */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide flex items-center gap-1.5">
-                <ClockIcon className="w-4 h-4" /> Contact History
-                {activities.length > 0 && (
-                  <span className="ml-1 text-xs font-normal text-gray-400 normal-case">({activities.length})</span>
-                )}
-              </h2>
-              <button
-                onClick={() => setShowLogForm(true)}
-                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium"
-              >
-                <PlusIcon className="w-3.5 h-3.5" /> Log activity
-              </button>
+              <div className="flex gap-1">
+                {[['activity', 'Activity'], ['audit', 'Change History']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setHistoryTab(key)}
+                    className={clsx(
+                      'px-3 py-1 text-xs font-medium rounded-md transition-colors',
+                      historyTab === key
+                        ? 'bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300'
+                        : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    )}
+                  >{label}</button>
+                ))}
+              </div>
+              {historyTab === 'activity' && (
+                <button
+                  onClick={() => setShowLogForm(true)}
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium"
+                >
+                  <PlusIcon className="w-3.5 h-3.5" /> Log activity
+                </button>
+              )}
             </div>
-            <ActivityFeed activities={activities} onSelect={setSelectedActivity} />
+            {historyTab === 'activity'
+              ? <ActivityFeed activities={activities} onSelect={setSelectedActivity} />
+              : <AuditLogTab entityType="deal" entityId={Number(id)} />
+            }
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from datetime import datetime, timezone
+from sqlalchemy import select, func, and_, cast, String
+from datetime import datetime, timezone, timedelta
 
 from app.models.deal import Deal
 from app.models.lead import Lead, LeadStatus
@@ -192,3 +192,139 @@ async def get_accounts_report(db: AsyncSession) -> dict:
             for row in rows
         ]
     }
+
+
+# ── Custom Report Engine ──────────────────────────────────────────────────────
+
+def _get_entity_model(entity: str):
+    from app.models.deal import Deal
+    from app.models.lead import Lead
+    from app.models.account import Account
+    from app.models.contact import Contact
+    return {"deals": Deal, "leads": Lead, "accounts": Account, "contacts": Contact}.get(entity)
+
+
+def _resolve_field(model, field_name: str):
+    """Return the SQLAlchemy column for a field name, with enum cast to string."""
+    col = getattr(model, field_name, None)
+    if col is None:
+        return None
+    return col
+
+
+def _build_date_filter(model, date_field: str, date_range: str, date_from=None, date_to=None):
+    col = _resolve_field(model, date_field)
+    if col is None:
+        return None
+    now = datetime.now(timezone.utc)
+    if date_range == "this_month":
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return col >= start
+    if date_range == "last_30":
+        return col >= now - timedelta(days=30)
+    if date_range == "last_90":
+        return col >= now - timedelta(days=90)
+    if date_range == "this_year":
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return col >= start
+    if date_range == "custom":
+        filters = []
+        if date_from:
+            filters.append(col >= date_from)
+        if date_to:
+            filters.append(col <= date_to)
+        return and_(*filters) if filters else None
+    return None  # "all"
+
+
+def _apply_filter(model, f: dict):
+    field = f.get("field")
+    op = f.get("op", "eq")
+    value = f.get("value")
+    col = _resolve_field(model, field)
+    if col is None:
+        return None
+    if op == "eq":
+        return col == value
+    if op == "neq":
+        return col != value
+    if op == "contains":
+        return cast(col, String).ilike(f"%{value}%")
+    if op == "in":
+        vals = value if isinstance(value, list) else str(value).split(",")
+        return col.in_(vals)
+    return None
+
+
+async def run_custom_report(config: dict, db: AsyncSession) -> list:
+    entity = config.get("entity", "deals")
+    model = _get_entity_model(entity)
+    if model is None:
+        return []
+
+    metrics = config.get("metrics") or [{"func": "count", "field": "id"}]
+    group_by_key = config.get("group_by")
+    date_field = config.get("date_field", "created_at")
+    date_range = config.get("date_range", "all")
+    date_from = config.get("date_from")
+    date_to = config.get("date_to")
+    filters = config.get("filters") or []
+
+    # Build group_by expression
+    group_expr = None
+    group_label = "group"
+    if group_by_key in ("month", "week"):
+        trunc = "month" if group_by_key == "month" else "week"
+        df_col = _resolve_field(model, date_field) or _resolve_field(model, "created_at")
+        group_expr = func.date_trunc(trunc, df_col)
+        group_label = group_by_key
+    elif group_by_key:
+        group_expr = _resolve_field(model, group_by_key)
+        group_label = group_by_key
+
+    # Build metric expressions
+    agg_map = {"count": func.count, "sum": func.sum, "avg": func.avg}
+    agg_exprs = []
+    agg_labels = []
+    for m in metrics:
+        fn = agg_map.get(m.get("func", "count"), func.count)
+        field_col = _resolve_field(model, m.get("field", "id"))
+        if field_col is None:
+            field_col = model.id
+        agg_exprs.append(fn(field_col))
+        agg_labels.append(f"{m.get('func', 'count')}_{m.get('field', 'id')}")
+
+    # SELECT
+    if group_expr is not None:
+        q = select(cast(group_expr, String).label("grp"), *agg_exprs).group_by(group_expr).order_by(group_expr)
+    else:
+        q = select(*agg_exprs)
+
+    # Date filter
+    date_cond = _build_date_filter(model, date_field, date_range, date_from, date_to)
+    if date_cond is not None:
+        q = q.where(date_cond)
+
+    # Custom filters
+    for f in filters:
+        cond = _apply_filter(model, f)
+        if cond is not None:
+            q = q.where(cond)
+
+    result = await db.execute(q)
+    rows = result.all()
+
+    out = []
+    for row in rows:
+        if group_expr is not None:
+            entry = {group_label: row[0]}
+            for i, label in enumerate(agg_labels):
+                v = row[i + 1]
+                entry[label] = float(v) if v is not None else 0
+        else:
+            entry = {}
+            for i, label in enumerate(agg_labels):
+                v = row[i]
+                entry[label] = float(v) if v is not None else 0
+        out.append(entry)
+    return out

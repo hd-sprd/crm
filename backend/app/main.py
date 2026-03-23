@@ -1,14 +1,16 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings as cfg
+from app.database import get_db
 from app.routers import auth, users, accounts, contacts, leads, deals, quotes, activities, tasks, reports
 from app.routers import settings as settings_router
 from app.routers import uploads, import_data, gdpr, audit_log as audit_log_router
 from app.routers import search, notifications as notifications_router, saved_views as saved_views_router
-from app.routers import quote_portal
+from app.routers import quote_portal, sequences as sequences_router
 from app.integrations import ms_graph
 from app.middleware.security import (
     SecurityHeadersMiddleware,
@@ -83,8 +85,21 @@ app.include_router(notifications_router.router, prefix=PREFIX)
 app.include_router(saved_views_router.router, prefix=PREFIX)
 app.include_router(ms_graph.router, prefix=PREFIX)
 app.include_router(quote_portal.router, prefix=PREFIX)
+app.include_router(sequences_router.router, prefix=PREFIX)
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": cfg.APP_VERSION}
+
+
+@app.post("/api/v1/workflow/trigger-internal")
+async def trigger_rules_internal(request: Request, db: AsyncSession = Depends(get_db)):
+    """Internal cron endpoint for Vercel Cron / external schedulers."""
+    from app.workflows.rules import run_all_rules
+    cron_secret = getattr(cfg, "CRON_SECRET", "")
+    auth = request.headers.get("authorization", "")
+    if cron_secret and auth != f"Bearer {cron_secret}":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    await run_all_rules(db)
+    return {"status": "ok"}
