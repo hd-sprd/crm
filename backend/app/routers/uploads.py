@@ -17,7 +17,10 @@ import app.services.storage as storage_svc
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+UPLOAD_DIR = os.environ.get(
+    "UPLOAD_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"),
+)
 THUMB_DIR = os.path.join(UPLOAD_DIR, "thumbnails")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(THUMB_DIR, exist_ok=True)

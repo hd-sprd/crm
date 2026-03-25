@@ -8,8 +8,9 @@ local uploads/ directory so local development needs no changes.
 import os
 import httpx
 
-_LOCAL_BASE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"
+_LOCAL_BASE = os.environ.get(
+    "UPLOAD_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"),
 )
 
 _supabase_client = None
