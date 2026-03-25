@@ -9,10 +9,21 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     poolclass=NullPool,
     connect_args={
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
+        "server_settings": {
+            "statement_timeout": "10000", # Optional: Verhindert hängende Queries (10s)
+        }
     }
 )
+
+@event.listens_for(engine.sync_engine, "connect")
+def on_connect(dbapi_connection, connection_record):
+    # Sicherstellen, dass es wirklich eine asyncpg-Connection ist (wegen dbapi)
+    if hasattr(dbapi_connection, '_connection'):
+        # Zugriff auf das eigentliche asyncpg Connection-Objekt
+        asyncpg_conn = dbapi_connection._connection
+        # Überschreibe die Cache-Größen hart
+        asyncpg_conn._statement_cache_size = 0
+        asyncpg_conn._prepared_statement_cache_size = 0
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
