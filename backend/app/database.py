@@ -9,6 +9,8 @@ engine = create_async_engine(
     echo=settings.DEBUG,
     poolclass=NullPool,
     connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
         "server_settings": {
             "statement_timeout": "10000", # Optional: Verhindert hängende Queries (10s)
         }
