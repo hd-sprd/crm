@@ -400,7 +400,8 @@ async def upsert_system_setting(
 
 QUOTE_TEMPLATE_KEY = "quote_template"
 LOGO_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "logos"
+    os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")),
+    "logos",
 )
 os.makedirs(LOGO_DIR, exist_ok=True)
 
