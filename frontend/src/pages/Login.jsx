@@ -122,9 +122,9 @@ export default function Login() {
         {/* Logo */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 mb-3">
-            <img src="/shirtforce.png" alt="Shirtforce" className="w-10 h-10 object-contain" />
+            <img src="/shirtforce.png" alt="Spreadhub" className="w-10 h-10 object-contain" />
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">Shirtforce</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight">Spreadhub</h1>
               <p className="text-xs text-gray-400 dark:text-gray-500 leading-tight">SpreadGroup CRM</p>
             </div>
           </div>

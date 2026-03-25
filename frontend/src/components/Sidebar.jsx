@@ -58,14 +58,14 @@ export default function Sidebar() {
       <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
         {sidebarOpen ? (
           <div className="flex items-center gap-2.5 min-w-0">
-            <img src="/shirtforce.png" alt="Shirtforce" className="w-7 h-7 object-contain flex-shrink-0" />
+            <img src="/shirtforce.png" alt="Spreadhub" className="w-7 h-7 object-contain flex-shrink-0" />
             <div className="truncate">
-              <span className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight block">Shirtforce</span>
+              <span className="text-base font-bold text-gray-800 dark:text-gray-200 leading-tight block">Spreadhub</span>
               <span className="text-xs text-gray-400 dark:text-gray-500 leading-tight block">SpreadGroup CRM</span>
             </div>
           </div>
         ) : (
-          <img src="/shirtforce.png" alt="Shirtforce" className="w-7 h-7 object-contain mx-auto" />
+          <img src="/shirtforce.png" alt="Spreadhub" className="w-7 h-7 object-contain mx-auto" />
         )}
         <button
           onClick={toggleSidebar}
