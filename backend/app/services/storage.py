@@ -34,19 +34,28 @@ def is_supabase() -> bool:
 
 
 async def upload(bucket: str, path: str, content: bytes, mime: str) -> str:
-    """Upload *content* to *bucket/path* and return the URL used to access it."""
+    """Upload *content* to *bucket/path* and return the URL used to access it.
+
+    Always returns an internal API path (not a Supabase CDN URL) so that:
+    - auth is enforced regardless of bucket visibility settings
+    - logos/thumbnails work identically in local and Supabase modes
+    """
     sb = _sb()
     if sb:
         sb.storage.from_(bucket).upload(
             path, content, {"content-type": mime, "upsert": "true"}
         )
-        return sb.storage.from_(bucket).get_public_url(path)
+        # Return backend-served paths, not CDN URLs — CDN URLs only work for
+        # public buckets and bypass our JWT auth on <img src> loads.
+        if bucket == "logos":
+            return f"/api/v1/settings/quote-template/logo/{path}"
+        # attachments / thumbnails are served via /uploads/* endpoints
+        return f"/api/v1/uploads/{bucket}/{path}"
     # Local fallback
     dest_dir = os.path.join(_LOCAL_BASE, bucket)
     os.makedirs(dest_dir, exist_ok=True)
     with open(os.path.join(dest_dir, path), "wb") as f:
         f.write(content)
-    # Return the internal API path (served by our own endpoints)
     return f"/api/v1/settings/quote-template/logo/{path}" if bucket == "logos" else f"/api/v1/uploads/{bucket}/{path}"
 
 
@@ -56,7 +65,8 @@ async def download(bucket: str, path: str) -> bytes | None:
     if sb:
         try:
             return sb.storage.from_(bucket).download(path)
-        except Exception:
+        except Exception as exc:
+            print(f"[storage] download failed bucket={bucket!r} path={path!r}: {exc}")
             return None
     local_path = os.path.join(_LOCAL_BASE, bucket, path)
     if os.path.exists(local_path):

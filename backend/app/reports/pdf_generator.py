@@ -64,17 +64,23 @@ async def _embed_logo(logo_url: str | None) -> tuple[str | None, str | None]:
                 ".svg": "image/svg+xml", ".webp": "image/webp"}.get(ext, "image/png")
 
         content: bytes | None = None
-        if logo_url.startswith("https://") or logo_url.startswith("http://"):
+        if logo_url.startswith("/api/v1/settings/quote-template/logo/"):
+            # Internal path — download directly from storage (works on Vercel/Supabase)
+            from app.services.storage import download as storage_download, is_supabase
+            if is_supabase():
+                content = await storage_download("logos", filename)
+            else:
+                upload_root = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "logos"
+                )
+                path = os.path.join(upload_root, filename)
+                if os.path.exists(path):
+                    with open(path, "rb") as f:
+                        content = f.read()
+        elif logo_url.startswith("https://") or logo_url.startswith("http://"):
+            # Legacy: old records stored the Supabase CDN URL directly
             from app.services.storage import fetch_url
             content = await fetch_url(logo_url)
-        else:
-            upload_root = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "logos"
-            )
-            path = os.path.join(upload_root, filename)
-            if os.path.exists(path):
-                with open(path, "rb") as f:
-                    content = f.read()
 
         if content:
             return base64.b64encode(content).decode(), mime
