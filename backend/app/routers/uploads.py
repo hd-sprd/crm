@@ -105,16 +105,18 @@ async def _auth_from_request(request: Request, db: AsyncSession) -> User:
     return user
 
 
-def _make_thumbnail(src_path: str, thumb_path: str) -> bool:
+def _make_thumbnail_bytes(content: bytes) -> bytes | None:
     try:
+        import io
         from PIL import Image
-        with Image.open(src_path) as img:
+        with Image.open(io.BytesIO(content)) as img:
             img.thumbnail((300, 300))
             img = img.convert("RGB")
-            img.save(thumb_path, "JPEG", quality=85)
-        return True
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=85)
+            return buf.getvalue()
     except Exception:
-        return False
+        return None
 
 
 @router.post("", response_model=AttachmentOut, status_code=201)
@@ -144,11 +146,11 @@ async def upload_file(
     await storage_svc.upload("attachments", stored_name, content, mime)
 
     has_thumb = False
-    if mime in IMAGE_MIME_TYPES and not storage_svc.is_supabase():
-        # Thumbnails only generated for local storage
-        file_path = os.path.join(UPLOAD_DIR, "attachments", stored_name)
-        thumb_path = os.path.join(THUMB_DIR, stored_name + ".jpg")
-        has_thumb = _make_thumbnail(file_path, thumb_path)
+    if mime in IMAGE_MIME_TYPES:
+        thumb_bytes = _make_thumbnail_bytes(content)
+        if thumb_bytes is not None:
+            await storage_svc.upload("thumbnails", stored_name + ".jpg", thumb_bytes, "image/jpeg")
+            has_thumb = True
 
     attachment = Attachment(
         entity_type=entity_type,
