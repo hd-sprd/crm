@@ -1,23 +1,21 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from app.config import settings
 
 
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    # Small pool — Vercel function instances are persistent within their lifetime,
-    # so reusing connections saves 100–400 ms per request.
-    # Supabase Supavisor (port 6543) pools on its side; we pool on ours too.
-    pool_size=3,
-    max_overflow=5,
-    pool_recycle=300,       # recycle connections every 5 min to avoid stale TCP
-    pool_pre_ping=True,     # check connection health before use
-    pool_timeout=10,        # fail fast if no connection available within 10 s
+    # NullPool is required when using Supabase Supavisor (port 6543, transaction mode).
+    # Supavisor is a PgBouncer-compatible proxy: it routes each *transaction* to a
+    # potentially different backend PostgreSQL connection, so application-side connection
+    # pooling causes DuplicatePreparedStatementError. Supavisor handles pooling on its
+    # side — our job is just to open a fresh connection per request.
+    poolclass=NullPool,
     connect_args={
-        # Required for Supabase Supavisor in transaction mode (PgBouncer-compatible)
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,           # required for PgBouncer transaction mode
+        "prepared_statement_cache_size": 0,  # required for PgBouncer transaction mode
         "command_timeout": 30,
     }
 )
