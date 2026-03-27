@@ -1,7 +1,7 @@
 import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from pydantic import BaseModel
@@ -105,6 +105,25 @@ async def _auth_from_request(request: Request, db: AsyncSession) -> User:
     return user
 
 
+def _verify_token(request: Request) -> None:
+    """Validate JWT signature + expiry only — no DB lookup.
+
+    Used by file-serve endpoints so they never fail due to DB issues.
+    The JWT expiry already limits how long a stolen token can be abused.
+    """
+    token = request.query_params.get("token") or ""
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        jwt.decode(token, cfg.SECRET_KEY, algorithms=[cfg.ALGORITHM])
+    except (JWTError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
 def _make_thumbnail_bytes(content: bytes) -> bytes | None:
     try:
         import io
@@ -188,22 +207,19 @@ async def serve_file(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    await _auth_from_request(request, db)
+    _verify_token(request)
     result = await db.execute(select(Attachment).where(Attachment.id == attachment_id))
     att = result.scalar_one_or_none()
     if not att:
         raise HTTPException(status_code=404, detail="Attachment not found")
     if storage_svc.is_supabase():
-        content = await storage_svc.download("attachments", att.stored_name)
-        if content is None:
+        url = storage_svc.create_signed_url("attachments", att.stored_name)
+        if not url:
             raise HTTPException(status_code=404, detail="File not found in storage")
-        disp = "inline" if att.mime_type in IMAGE_MIME_TYPES else f'attachment; filename="{att.original_name}"'
-        return Response(content=content, media_type=att.mime_type,
-                        headers={"Content-Disposition": disp})
+        return RedirectResponse(url=url, status_code=302)
     path = os.path.join(UPLOAD_DIR, "attachments", att.stored_name)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found on disk")
-    # Images: no Content-Disposition so browsers render them inline in <img> tags
     if att.mime_type in IMAGE_MIME_TYPES:
         return FileResponse(path, media_type=att.mime_type)
     return FileResponse(path, media_type=att.mime_type, filename=att.original_name)
@@ -215,16 +231,16 @@ async def serve_thumbnail(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    await _auth_from_request(request, db)
+    _verify_token(request)
     result = await db.execute(select(Attachment).where(Attachment.id == attachment_id))
     att = result.scalar_one_or_none()
     if not att or not att.has_thumbnail:
         raise HTTPException(status_code=404, detail="Thumbnail not available")
     if storage_svc.is_supabase():
-        content = await storage_svc.download("thumbnails", att.stored_name + ".jpg")
-        if content is None:
+        url = storage_svc.create_signed_url("thumbnails", att.stored_name + ".jpg")
+        if not url:
             raise HTTPException(status_code=404, detail="Thumbnail not found in storage")
-        return Response(content=content, media_type="image/jpeg")
+        return RedirectResponse(url=url, status_code=302)
     thumb_path = os.path.join(THUMB_DIR, att.stored_name + ".jpg")
     if not os.path.exists(thumb_path):
         raise HTTPException(status_code=404, detail="Thumbnail not found on disk")

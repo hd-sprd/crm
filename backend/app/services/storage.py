@@ -75,6 +75,24 @@ async def download(bucket: str, path: str) -> bytes | None:
     return None
 
 
+def create_signed_url(bucket: str, path: str, expires_in: int = 120) -> str | None:
+    """Return a short-lived Supabase signed URL for *bucket/path*, or None on error.
+
+    The browser fetches the file directly from Supabase CDN — no proxying through
+    the Vercel function. Falls back to None for local storage (caller must serve locally).
+    """
+    sb = _sb()
+    if not sb:
+        return None
+    try:
+        res = sb.storage.from_(bucket).create_signed_url(path, expires_in)
+        # supabase-py 2.x returns a dict; key differs between minor versions
+        return res.get("signedURL") or res.get("signedUrl") or res.get("signed_url")
+    except Exception as exc:
+        print(f"[storage] create_signed_url failed bucket={bucket!r} path={path!r}: {exc}")
+        return None
+
+
 async def delete(bucket: str, path: str) -> None:
     """Delete *bucket/path* (best-effort; ignores errors)."""
     sb = _sb()

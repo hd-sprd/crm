@@ -684,13 +684,12 @@ async def update_currencies(
 async def serve_quote_logo(
     filename: str,
     request: Request,
-    db: AsyncSession = Depends(get_db),
 ):
     """Serve the stored company logo (requires authentication)."""
-    from app.routers.uploads import _auth_from_request
-    from fastapi.responses import FileResponse
+    from app.routers.uploads import _verify_token
+    from fastapi.responses import FileResponse, RedirectResponse
 
-    await _auth_from_request(request, db)
+    _verify_token(request)
 
     # Sanitize filename – no path traversal
     safe_name = os.path.basename(filename)
@@ -699,10 +698,10 @@ async def serve_quote_logo(
     mime = mime_map.get(ext, "application/octet-stream")
 
     if storage_svc.is_supabase():
-        content = await storage_svc.download("logos", safe_name)
-        if content is None:
+        url = storage_svc.create_signed_url("logos", safe_name)
+        if not url:
             raise HTTPException(status_code=404, detail="Logo not found in storage")
-        return Response(content=content, media_type=mime)
+        return RedirectResponse(url=url, status_code=302)
 
     path = os.path.join(LOGO_DIR, safe_name)
     if not os.path.exists(path):
