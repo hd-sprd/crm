@@ -51,6 +51,13 @@
       "system": "System"
     }
   },
+  "filters": {
+    "quick": {
+      "30d": "30 days",
+      "3m": "3 months",
+      "1y": "1 year"
+    }
+  },
   "auth": {
     "login": "Login",
     "loginTitle": "Sign in to your account",

@@ -8,6 +8,8 @@ import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { PlusIcon, ArrowDownTrayIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon } from '@heroicons/react/24/outline'
 import QuotePreview from '../components/QuotePreview'
+import QuickDateFilter from '../components/QuickDateFilter'
+import { getQuickFilterDate } from '../utils/dates'
 
 const STATUS_COLORS = {
   draft: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
@@ -33,15 +35,18 @@ export default function Quotes() {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
+  const [quickFilter, setQuickFilter] = useState('30d')
+  const [dateFrom, setDateFrom] = useState(() => getQuickFilterDate('30d'))
   const [dateTo, setDateTo] = useState('')
 
-  const fetch = useCallback((p) => {
+  const fetch = useCallback((p, dateOverride = null) => {
     setLoading(true)
     const params = { skip: (p - 1) * PAGE_SIZE, limit: PAGE_SIZE }
     if (statusFilter) params.status = statusFilter
-    if (dateFrom) params.created_after = dateFrom
-    if (dateTo) params.created_before = dateTo + 'T23:59:59'
+    const from = dateOverride ? dateOverride.from : dateFrom
+    const to   = dateOverride ? dateOverride.to   : dateTo
+    if (from) params.created_after = from
+    if (to) params.created_before = to + 'T23:59:59'
     quotesApi.list(params)
       .then(data => { setQuotes(data); setHasMore(data.length === PAGE_SIZE) })
       .finally(() => setLoading(false))
@@ -51,10 +56,17 @@ export default function Quotes() {
   useEffect(() => { dealsApi.list({ limit: 200 }).then(setDeals) }, [])
 
   const applyFilters = () => { setPage(1); fetch(1) }
-  const hasFilter = statusFilter || dateFrom || dateTo
+  const hasFilter = quickFilter || statusFilter || dateFrom || dateTo
   const clearFilters = () => {
-    setStatusFilter(''); setDateFrom(''); setDateTo('')
-    setPage(1); fetch(1)
+    setStatusFilter(''); setQuickFilter(''); setDateFrom(''); setDateTo('')
+    setPage(1); fetch(1, { from: '', to: '' })
+  }
+
+  const applyQuickFilter = (preset) => {
+    setQuickFilter(preset)
+    const from = preset ? getQuickFilterDate(preset) : ''
+    setDateFrom(from); setDateTo('')
+    setPage(1); fetch(1, { from, to: '' })
   }
 
   const handleSend = async (id) => {
@@ -92,11 +104,12 @@ export default function Quotes() {
           <option value="">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{t(`quotes.statuses.${s}`, s)}</option>)}
         </select>
+        <QuickDateFilter value={quickFilter} onChange={applyQuickFilter} />
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)} title="Created from" />
+          onChange={e => { setDateFrom(e.target.value); setQuickFilter('') }} title="Created from" />
         <span className="text-gray-400 text-xs">–</span>
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateTo}
-          onChange={e => setDateTo(e.target.value)} title="Created to" />
+          onChange={e => { setDateTo(e.target.value); setQuickFilter('') }} title="Created to" />
         <button onClick={applyFilters} className="btn-secondary text-sm px-3 py-1.5">Apply</button>
         {hasFilter && (
           <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">

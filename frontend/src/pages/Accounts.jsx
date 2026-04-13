@@ -10,6 +10,8 @@ import { useForm } from 'react-hook-form'
 import useBulkSelect from '../hooks/useBulkSelect'
 import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
+import QuickDateFilter from '../components/QuickDateFilter'
+import { getQuickFilterDate } from '../utils/dates'
 
 const STATUS_COLORS = {
   active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
@@ -37,7 +39,8 @@ export default function Accounts() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
+  const [quickFilter, setQuickFilter] = useState('30d')
+  const [dateFrom, setDateFrom] = useState(() => getQuickFilterDate('30d'))
   const [dateTo, setDateTo] = useState('')
 
   const { register, handleSubmit, reset } = useForm()
@@ -48,14 +51,16 @@ export default function Accounts() {
     settingsApi.listCustomFields('account').then(setCustomFieldDefs).catch(() => {})
   }, [])
 
-  const fetch = useCallback((p) => {
+  const fetch = useCallback((p, dateOverride = null) => {
     setLoading(true)
     const params = { skip: (p - 1) * PAGE_SIZE, limit: PAGE_SIZE }
     if (search) params.search = search
     if (statusFilter) params.status = statusFilter
     if (typeFilter) params.type = typeFilter
-    if (dateFrom) params.created_after = dateFrom
-    if (dateTo) params.created_before = dateTo + 'T23:59:59'
+    const from = dateOverride ? dateOverride.from : dateFrom
+    const to   = dateOverride ? dateOverride.to   : dateTo
+    if (from) params.created_after = from
+    if (to) params.created_before = to + 'T23:59:59'
     accountsApi.list(params)
       .then(data => { setAccounts(data); setHasMore(data.length === PAGE_SIZE) })
       .finally(() => setLoading(false))
@@ -64,13 +69,22 @@ export default function Accounts() {
   useEffect(() => { fetch(page) }, [page])  // eslint-disable-line
 
   const applyFilters = () => { setPage(1); fetch(1) }
-  const hasFilter = search || statusFilter || typeFilter || dateFrom || dateTo
+  const hasFilter = quickFilter || search || statusFilter || typeFilter || dateFrom || dateTo
   const clearFilters = () => {
-    setSearch(''); setStatusFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo('')
-    setPage(1); fetch(1)
+    setSearch(''); setStatusFilter(''); setTypeFilter('')
+    setQuickFilter(''); setDateFrom(''); setDateTo('')
+    setPage(1); fetch(1, { from: '', to: '' })
+  }
+
+  const applyQuickFilter = (preset) => {
+    setQuickFilter(preset)
+    const from = preset ? getQuickFilterDate(preset) : ''
+    setDateFrom(from); setDateTo('')
+    setPage(1); fetch(1, { from, to: '' })
   }
 
   const handleApplySavedView = (filters) => {
+    setQuickFilter('')
     if (filters.search !== undefined) setSearch(filters.search || '')
     if (filters.status !== undefined) setStatusFilter(filters.status || '')
     if (filters.type !== undefined) setTypeFilter(filters.type || '')
@@ -117,11 +131,12 @@ export default function Accounts() {
           <option value="B2B">B2B</option>
           <option value="B2B2C">B2B2C</option>
         </select>
+        <QuickDateFilter value={quickFilter} onChange={applyQuickFilter} />
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)} title="Created from" />
+          onChange={e => { setDateFrom(e.target.value); setQuickFilter('') }} title="Created from" />
         <span className="text-gray-400 text-xs">–</span>
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateTo}
-          onChange={e => setDateTo(e.target.value)} title="Created to" />
+          onChange={e => { setDateTo(e.target.value); setQuickFilter('') }} title="Created to" />
         <button onClick={applyFilters} className="btn-secondary text-sm px-3 py-1.5">Apply</button>
         {hasFilter && (
           <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">

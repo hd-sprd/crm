@@ -12,6 +12,8 @@ import clsx from 'clsx'
 import useBulkSelect from '../hooks/useBulkSelect'
 import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
+import QuickDateFilter from '../components/QuickDateFilter'
+import { getQuickFilterDate } from '../utils/dates'
 
 const PAGE_SIZE = 50
 
@@ -49,7 +51,8 @@ export default function Leads() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
+  const [quickFilter, setQuickFilter] = useState('30d')
+  const [dateFrom, setDateFrom] = useState(() => getQuickFilterDate('30d'))
   const [dateTo, setDateTo] = useState('')
 
   const [customFieldDefs, setCustomFieldDefs] = useState([])
@@ -58,14 +61,16 @@ export default function Leads() {
 
   useEffect(() => { settingsApi.listCustomFields('lead').then(setCustomFieldDefs).catch(() => {}) }, [])
 
-  const fetch = useCallback((p) => {
+  const fetch = useCallback((p, dateOverride = null) => {
     setLoading(true)
     const params = { skip: (p - 1) * PAGE_SIZE, limit: PAGE_SIZE }
     if (statusFilter) params.status = statusFilter
     if (sourceFilter) params.source = sourceFilter
     if (search) params.search = search
-    if (dateFrom) params.created_after = dateFrom
-    if (dateTo) params.created_before = dateTo + 'T23:59:59'
+    const from = dateOverride ? dateOverride.from : dateFrom
+    const to   = dateOverride ? dateOverride.to   : dateTo
+    if (from) params.created_after = from
+    if (to) params.created_before = to + 'T23:59:59'
     leadsApi.list(params)
       .then(data => { setLeads(data); setHasMore(data.length === PAGE_SIZE) })
       .finally(() => setLoading(false))
@@ -75,13 +80,22 @@ export default function Leads() {
   useEffect(() => { usersApi.list().then(setUsers).catch(() => {}) }, [])
 
   const applyFilters = () => { setPage(1); fetch(1) }
-  const hasFilter = search || statusFilter || sourceFilter || dateFrom || dateTo
+  const hasFilter = quickFilter || search || statusFilter || sourceFilter || dateFrom || dateTo
   const clearFilters = () => {
-    setSearch(''); setStatusFilter(''); setSourceFilter(''); setDateFrom(''); setDateTo('')
-    setPage(1); fetch(1)
+    setSearch(''); setStatusFilter(''); setSourceFilter('')
+    setQuickFilter(''); setDateFrom(''); setDateTo('')
+    setPage(1); fetch(1, { from: '', to: '' })
+  }
+
+  const applyQuickFilter = (preset) => {
+    setQuickFilter(preset)
+    const from = preset ? getQuickFilterDate(preset) : ''
+    setDateFrom(from); setDateTo('')
+    setPage(1); fetch(1, { from, to: '' })
   }
 
   const handleApplySavedView = (filters) => {
+    setQuickFilter('')
     if (filters.search !== undefined) setSearch(filters.search || '')
     if (filters.status !== undefined) setStatusFilter(filters.status || '')
     if (filters.source !== undefined) setSourceFilter(filters.source || '')
@@ -172,11 +186,12 @@ export default function Leads() {
             <option key={s} value={s}>{t(`leads.sources.${s}`, s)}</option>
           ))}
         </select>
+        <QuickDateFilter value={quickFilter} onChange={applyQuickFilter} />
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)} title="Created from" />
+          onChange={e => { setDateFrom(e.target.value); setQuickFilter('') }} title="Created from" />
         <span className="text-gray-400 text-xs">–</span>
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateTo}
-          onChange={e => setDateTo(e.target.value)} title="Created to" />
+          onChange={e => { setDateTo(e.target.value); setQuickFilter('') }} title="Created to" />
         <button onClick={applyFilters} className="btn-secondary text-sm px-3 py-1.5">Apply</button>
         {hasFilter && (
           <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
