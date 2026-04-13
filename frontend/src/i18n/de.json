@@ -43,7 +43,13 @@
     "logout": "Abmelden",
     "data": "Daten",
     "export": "Exportieren",
-    "help": "Hilfe"
+    "help": "Hilfe",
+    "group": {
+      "pipeline": "Pipeline",
+      "crm": "CRM",
+      "work": "Arbeit",
+      "system": "System"
+    }
   },
   "auth": {
     "login": "Anmelden",
