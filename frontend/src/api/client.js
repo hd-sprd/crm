@@ -21,6 +21,25 @@ client.interceptors.request.use(config => {
   return config
 })
 
+// Retry on network errors and 5xx — handles Vercel cold-start timeouts
+// (502/504). Must be registered before the 401 handler so a successful
+// retry stays on the success path and never triggers the login redirect.
+client.interceptors.response.use(
+  res => res,
+  async (error) => {
+    const config = error.config
+    if (!config) return Promise.reject(error)
+    config._retries = config._retries || 0
+    const retryable = !error.response || error.response.status >= 500
+    if (retryable && config._retries < 2) {
+      config._retries += 1
+      await new Promise(r => setTimeout(r, config._retries * 1000))
+      return client(config)
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Handle 401 globally – redirect to login
 client.interceptors.response.use(
   res => res,
