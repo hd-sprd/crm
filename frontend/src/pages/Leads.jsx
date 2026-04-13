@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { leadsApi } from '../api/leads'
 import { usersApi } from '../api/users'
-import { accountsApi } from '../api/accounts'
+import AccountSelect from '../components/AccountSelect'
 import { settingsApi } from '../api/settings'
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ArrowRightCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -39,8 +39,6 @@ export default function Leads() {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [users, setUsers] = useState([])
-  const [accounts, setAccounts] = useState([])
-
   // Lead detail modal
   const [selectedLead, setSelectedLead] = useState(null)
   // Convert modal
@@ -59,7 +57,6 @@ export default function Leads() {
   const bulk = useBulkSelect(leads)
 
   useEffect(() => { settingsApi.listCustomFields('lead').then(setCustomFieldDefs).catch(() => {}) }, [])
-  useEffect(() => { accountsApi.list({ limit: 200 }).then(setAccounts).catch(() => {}) }, [])
 
   const fetch = useCallback((p) => {
     setLoading(true)

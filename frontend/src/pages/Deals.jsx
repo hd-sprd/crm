@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { dealsApi } from '../api/deals'
-import { accountsApi } from '../api/accounts'
 import Pipeline from '../components/Pipeline'
 import { useAppStore } from '../store'
+import AccountSelect from '../components/AccountSelect'
 import {
   TableCellsIcon, ViewColumnsIcon, PlusIcon, XMarkIcon, MagnifyingGlassIcon,
   ChevronLeftIcon, ChevronRightIcon,
@@ -23,7 +23,7 @@ const PAGE_SIZE = 50
 export default function Deals() {
   const { t, i18n } = useTranslation()
   const [deals, setDeals] = useState([])
-  const [accounts, setAccounts] = useState([])
+  const accounts = useAppStore(s => s.accounts)
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [page, setPage] = useState(1)
@@ -44,6 +44,7 @@ export default function Deals() {
   const [users, setUsers] = useState([])
   const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
   const [newDealCurrency, setNewDealCurrency] = useState('EUR')
+  const [newDealAccountId, setNewDealAccountId] = useState('')
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const { dealViewMode, setDealViewMode } = useAppStore()
   const navigate = useNavigate()
@@ -86,7 +87,6 @@ export default function Deals() {
   }, [page, selectedWorkflowId])  // eslint-disable-line
 
 
-  useEffect(() => { accountsApi.list({ limit: 200 }).then(setAccounts) }, [])
   useEffect(() => { usersApi.list().then(setUsers).catch(() => {}) }, [])
   useEffect(() => { settingsApi.getCurrencies().then(setCurrencies).catch(() => {}) }, [])
   useEffect(() => { settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {}) }, [])
@@ -128,7 +128,7 @@ export default function Deals() {
       const currencyRate = currencies.currencies[newDealCurrency]?.rate ?? 1
       const payload = {
         ...data,
-        account_id: Number(data.account_id),
+        account_id: Number(newDealAccountId),
         workflow_id: data.workflow_id ? Number(data.workflow_id) : selectedWorkflowId,
         value_eur: data.value_eur ? Number(data.value_eur) : null,
         currency: newDealCurrency,
@@ -268,7 +268,7 @@ export default function Deals() {
                   </p>
                 )}
               </div>
-              <button onClick={() => { setShowNew(false); reset() }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+              <button onClick={() => { setShowNew(false); reset(); setNewDealAccountId('') }} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
                 <XMarkIcon className="w-5 h-5 text-gray-400" />
               </button>
             </div>
@@ -279,14 +279,15 @@ export default function Deals() {
               </div>
               <div>
                 <label className="label">Account *</label>
-                <select className="input-field w-full" required {...register('account_id')}>
-                  <option value="">— select account —</option>
-                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
+                <AccountSelect
+                  value={newDealAccountId}
+                  onChange={setNewDealAccountId}
+                  required
+                />
                 {accounts.length === 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                    Keine Accounts vorhanden.{' '}
-                    <a href="/accounts" className="underline font-medium">Zuerst einen Account anlegen →</a>
+                    Noch keine Accounts.{' '}
+                    <a href="/accounts" className="underline font-medium">Account anlegen →</a>
                   </p>
                 )}
               </div>
@@ -380,7 +381,7 @@ export default function Deals() {
                 <button type="submit" disabled={isSubmitting} className="btn-primary flex-1 disabled:opacity-50">
                   {isSubmitting ? 'Creating…' : 'Create Deal'}
                 </button>
-                <button type="button" onClick={() => { setShowNew(false); reset() }} className="btn-secondary">Cancel</button>
+                <button type="button" onClick={() => { setShowNew(false); reset(); setNewDealAccountId('') }} className="btn-secondary">Cancel</button>
               </div>
             </form>
           </div>

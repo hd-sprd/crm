@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import Sidebar from './Sidebar'
 import Header from './Header'
@@ -7,7 +8,11 @@ import AnimatedPage from './AnimatedPage'
 
 export default function Layout() {
   const sidebarOpen = useAppStore(s => s.sidebarOpen)
+  const loadAccounts = useAppStore(s => s.loadAccounts)
   const location = useLocation()
+
+  // Pre-load shared reference data once so all pages have it instantly
+  useEffect(() => { loadAccounts() }, []) // eslint-disable-line
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
