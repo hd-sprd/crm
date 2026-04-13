@@ -14,6 +14,7 @@ import { quotesApi } from '../api/quotes'
 import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
 import { sequencesApi } from '../api/sequences'
+import { tasksApi } from '../api/tasks'
 import ActivityFeed from '../components/ActivityFeed'
 import QuoteBuilder from '../components/QuoteBuilder'
 import QuotePreview from '../components/QuotePreview'
@@ -62,6 +63,10 @@ export default function DealDetail() {
   const [availableSequences, setAvailableSequences] = useState([])
   const [enrolling, setEnrolling] = useState(false)
   const [enrollSeqId, setEnrollSeqId] = useState('')
+  const [tasks, setTasks] = useState([])
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [newTask, setNewTask] = useState({ title: '', due_date: '', priority: 'medium' })
+  const [savingTask, setSavingTask] = useState(false)
 
   const stageLabel = (s) => i18n.language === 'de' ? s.label_de : s.label_en
   const getStageObj = (key) => workflowStages.find(s => s.key === key)
@@ -90,10 +95,40 @@ export default function DealDetail() {
     sequencesApi.listEnrollments({ entity_type: 'deal', entity_id: Number(id) })
       .then(setEnrollments).catch(() => {})
 
+  const loadTasks = () =>
+    tasksApi.list({ related_to_type: 'deal', related_to_id: Number(id), limit: 50 })
+      .then(setTasks).catch(() => {})
+
+  const handleAddTask = async () => {
+    if (!newTask.title) return
+    setSavingTask(true)
+    try {
+      await tasksApi.create({
+        ...newTask,
+        due_date: newTask.due_date || null,
+        related_to_type: 'deal',
+        related_to_id: Number(id),
+      })
+      setNewTask({ title: '', due_date: '', priority: 'medium' })
+      setShowTaskForm(false)
+      loadTasks()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error creating task')
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  const handleCompleteTask = async (taskId) => {
+    await tasksApi.update(taskId, { status: 'completed' })
+    loadTasks()
+  }
+
   useEffect(() => {
     load()
     loadActivities()
     loadEnrollments()
+    loadTasks()
     settingsApi.getCurrencies().then(setCurrencies).catch(() => {})
     settingsApi.listCustomFields('deal').then(setCustomFieldDefs).catch(() => {})
     sequencesApi.list({ applies_to: 'deal', is_active: true }).then(setAvailableSequences).catch(() => {})
@@ -389,6 +424,69 @@ export default function DealDetail() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Tasks */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                {t('tasks.title')} ({tasks.filter(t => t.status === 'open').length})
+              </h2>
+              <button onClick={() => setShowTaskForm(f => !f)}
+                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium">
+                <PlusIcon className="w-3.5 h-3.5" /> {t('tasks.new')}
+              </button>
+            </div>
+            {showTaskForm && (
+              <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2">
+                <input className="input-field w-full text-sm" placeholder={t('common.name') + ' *'}
+                  value={newTask.title} onChange={e => setNewTask(d => ({ ...d, title: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" className="input-field w-full text-sm" value={newTask.due_date}
+                    onChange={e => setNewTask(d => ({ ...d, due_date: e.target.value }))} />
+                  <select className="input-field w-full text-sm" value={newTask.priority}
+                    onChange={e => setNewTask(d => ({ ...d, priority: e.target.value }))}>
+                    <option value="low">{t('tasks.priorities.low')}</option>
+                    <option value="medium">{t('tasks.priorities.medium')}</option>
+                    <option value="high">{t('tasks.priorities.high')}</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleAddTask} disabled={savingTask || !newTask.title}
+                    className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50">{t('common.save')}</button>
+                  <button onClick={() => setShowTaskForm(false)} className="btn-secondary text-xs px-3 py-1.5">{t('common.cancel')}</button>
+                </div>
+              </div>
+            )}
+            {tasks.length === 0
+              ? <p className="text-sm text-gray-400">{t('common.noResults')}</p>
+              : (
+                <div className="space-y-1.5">
+                  {tasks.map(task => (
+                    <div key={task.id} className={clsx(
+                      'flex items-center gap-2 px-3 py-2 rounded-lg text-sm',
+                      task.status === 'completed' ? 'opacity-50 line-through' : 'bg-gray-50 dark:bg-gray-700/50'
+                    )}>
+                      <input type="checkbox" checked={task.status === 'completed'}
+                        onChange={() => task.status === 'open' && handleCompleteTask(task.id)}
+                        className="rounded border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                      <span className="flex-1 text-gray-800 dark:text-gray-200">{task.title}</span>
+                      {task.due_date && (
+                        <span className={clsx('text-xs', new Date(task.due_date) < new Date() && task.status === 'open' ? 'text-red-500' : 'text-gray-400')}>
+                          {task.due_date}
+                        </span>
+                      )}
+                      <span className={clsx('text-xs px-1.5 py-0.5 rounded-full',
+                        task.priority === 'high' ? 'bg-red-100 text-red-600 dark:bg-red-900/30' :
+                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30' :
+                        'bg-gray-100 text-gray-500 dark:bg-gray-700')}>
+                        {t(`tasks.priorities.${task.priority}`, task.priority)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
           </div>
 
           {/* Contact History / Change History */}

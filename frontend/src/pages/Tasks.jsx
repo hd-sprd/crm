@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { tasksApi } from '../api/tasks'
 import { usersApi } from '../api/users'
+import { dealsApi } from '../api/deals'
+import { leadsApi } from '../api/leads'
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useForm } from 'react-hook-form'
@@ -25,6 +28,7 @@ const STATUS_OPTIONS = [
 
 export default function Tasks() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [tasks, setTasks] = useState([])
   const [filter, setFilter] = useState('open')
   const [loading, setLoading] = useState(true)
@@ -32,6 +36,9 @@ export default function Tasks() {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [users, setUsers] = useState([])
+  const [deals, setDeals] = useState([])
+  const [leads, setLeads] = useState([])
+  const [relatedType, setRelatedType] = useState('')
 
   const [search, setSearch] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
@@ -57,6 +64,8 @@ export default function Tasks() {
   useEffect(() => { fetch(page) }, [page])  // eslint-disable-line
   useEffect(() => { setPage(1); fetch(1) }, [filter])  // eslint-disable-line
   useEffect(() => { usersApi.list().then(setUsers).catch(() => {}) }, [])
+  useEffect(() => { dealsApi.list({ limit: 200 }).then(setDeals).catch(() => {}) }, [])
+  useEffect(() => { leadsApi.list({ limit: 200 }).then(setLeads).catch(() => {}) }, [])
 
   const applyFilters = () => { setPage(1); fetch(1) }
   const hasFilter = search || priorityFilter || dateFrom || dateTo
@@ -153,9 +162,37 @@ export default function Tasks() {
               <label className="label">{t('tasks.description')}</label>
               <textarea rows={2} className="input-field w-full" {...register('description')} />
             </div>
+            <div>
+              <label className="label">{t('tasks.relatedTo')}</label>
+              <select className="input-field w-full" value={relatedType}
+                onChange={e => { setRelatedType(e.target.value) }}
+                {...register('related_to_type')}>
+                <option value="">— {t('common.optional')} —</option>
+                <option value="deal">{t('tasks.relatedTypes.deal')}</option>
+                <option value="lead">{t('tasks.relatedTypes.lead')}</option>
+              </select>
+            </div>
+            {relatedType === 'deal' && (
+              <div>
+                <label className="label">Deal</label>
+                <select className="input-field w-full" {...register('related_to_id')}>
+                  <option value="">— select —</option>
+                  {deals.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+                </select>
+              </div>
+            )}
+            {relatedType === 'lead' && (
+              <div>
+                <label className="label">Lead</label>
+                <select className="input-field w-full" {...register('related_to_id')}>
+                  <option value="">— select —</option>
+                  {leads.map(l => <option key={l.id} value={l.id}>{l.company_name || l.contact_name || `Lead #${l.id}`}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex gap-2 items-end">
               <button type="submit" className="btn-primary">{t('common.save')}</button>
-              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">{t('common.cancel')}</button>
+              <button type="button" onClick={() => { setShowForm(false); setRelatedType('') }} className="btn-secondary">{t('common.cancel')}</button>
             </div>
           </form>
         </div>
@@ -176,7 +213,7 @@ export default function Tasks() {
                   ref={el => { if (el) el.indeterminate = bulk.someSelected }}
                   onChange={bulk.toggleAll} className="rounded border-gray-300 dark:border-gray-600" />
               </th>
-              {['Title', t('common.priority'), t('tasks.dueDate'), t('common.status')].map(h => (
+              {['Title', t('common.priority'), t('tasks.dueDate'), t('tasks.relatedTo'), t('common.status')].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
               ))}
             </tr>
@@ -199,6 +236,15 @@ export default function Tasks() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{task.due_date || '—'}</td>
+                  <td className="px-4 py-3">
+                    {task.related_to_type && task.related_to_id ? (
+                      <button
+                        onClick={() => navigate(`/${task.related_to_type}s/${task.related_to_id}`)}
+                        className="text-xs text-brand-600 hover:underline dark:text-brand-400">
+                        {t(`tasks.relatedTypes.${task.related_to_type}`, task.related_to_type)} #{task.related_to_id}
+                      </button>
+                    ) : <span className="text-gray-400">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium',
                       task.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'

@@ -283,6 +283,12 @@ export default function Deals() {
                   <option value="">— select account —</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
+                {accounts.length === 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Keine Accounts vorhanden.{' '}
+                    <a href="/accounts" className="underline font-medium">Zuerst einen Account anlegen →</a>
+                  </p>
+                )}
               </div>
               {workflows.length > 1 && (
                 <div>

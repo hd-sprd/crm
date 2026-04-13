@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { leadsApi } from '../api/leads'
 import { usersApi } from '../api/users'
+import { accountsApi } from '../api/accounts'
 import { settingsApi } from '../api/settings'
-import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ArrowRightCircleIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import { useForm } from 'react-hook-form'
 import clsx from 'clsx'
@@ -30,12 +32,21 @@ const STATUS_OPTIONS = [
 
 export default function Leads() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
   const [users, setUsers] = useState([])
+  const [accounts, setAccounts] = useState([])
+
+  // Lead detail modal
+  const [selectedLead, setSelectedLead] = useState(null)
+  // Convert modal
+  const [converting, setConverting] = useState(false)
+  const [convertData, setConvertData] = useState({ deal_title: '', create_account: true, account_name: '', deal_value_eur: '' })
+  const [convertSubmitting, setConvertSubmitting] = useState(false)
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -48,6 +59,7 @@ export default function Leads() {
   const bulk = useBulkSelect(leads)
 
   useEffect(() => { settingsApi.listCustomFields('lead').then(setCustomFieldDefs).catch(() => {}) }, [])
+  useEffect(() => { accountsApi.list({ limit: 200 }).then(setAccounts).catch(() => {}) }, [])
 
   const fetch = useCallback((p) => {
     setLoading(true)
@@ -90,6 +102,49 @@ export default function Leads() {
       reset(); setShowForm(false); fetch(page)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error')
+    }
+  }
+
+  const openLead = (lead) => {
+    setSelectedLead(lead)
+    setConvertData({
+      deal_title: lead.company_name ? `${lead.company_name} Deal` : '',
+      create_account: true,
+      account_name: lead.company_name || '',
+      deal_value_eur: '',
+    })
+  }
+
+  const handleQualify = async (lead) => {
+    try {
+      await leadsApi.update(lead.id, { status: 'qualified' })
+      toast.success('Lead qualified')
+      setSelectedLead(l => ({ ...l, status: 'qualified' }))
+      fetch(page)
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error')
+    }
+  }
+
+  const handleConvert = async () => {
+    if (!convertData.deal_title) return
+    setConvertSubmitting(true)
+    try {
+      const deal = await leadsApi.convert(selectedLead.id, {
+        deal_title: convertData.deal_title,
+        create_account: convertData.create_account,
+        account_name: convertData.create_account ? convertData.account_name : undefined,
+        deal_value_eur: convertData.deal_value_eur ? Number(convertData.deal_value_eur) : undefined,
+      })
+      toast.success(t('leads.convert') + ' ✓')
+      setSelectedLead(null)
+      setConverting(false)
+      fetch(page)
+      navigate(`/deals/${deal.id}`)
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error converting lead')
+    } finally {
+      setConvertSubmitting(false)
     }
   }
 
@@ -205,8 +260,10 @@ export default function Leads() {
               : leads.length === 0
               ? <tr><td colSpan={5} className="text-center py-10 text-gray-400">No leads found.</td></tr>
               : leads.map(lead => (
-                <tr key={lead.id} className={clsx('hover:bg-gray-50 dark:hover:bg-gray-700/30', bulk.isSelected(lead.id) && 'bg-brand-50/50 dark:bg-brand-900/10')}>
-                  <td className="px-4 py-3">
+                <tr key={lead.id}
+                  onClick={() => openLead(lead)}
+                  className={clsx('cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30', bulk.isSelected(lead.id) && 'bg-brand-50/50 dark:bg-brand-900/10')}>
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     <input type="checkbox" checked={bulk.isSelected(lead.id)}
                       onChange={() => bulk.toggleItem(lead.id)} className="rounded border-gray-300 dark:border-gray-600" />
                   </td>
@@ -227,6 +284,93 @@ export default function Leads() {
 
       <Pagination page={page} hasMore={hasMore} count={leads.length}
         onPrev={() => setPage(p => p - 1)} onNext={() => setPage(p => p + 1)} />
+
+      {/* Lead detail modal */}
+      {selectedLead && !converting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {selectedLead.company_name || selectedLead.contact_name || 'Lead'}
+              </h2>
+              <button onClick={() => setSelectedLead(null)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-2 text-sm">
+              {selectedLead.contact_name && <div><span className="text-gray-400">{t('leads.contactName')}:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{selectedLead.contact_name}</span></div>}
+              {selectedLead.contact_email && <div><span className="text-gray-400">E-Mail:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{selectedLead.contact_email}</span></div>}
+              {selectedLead.source && <div><span className="text-gray-400">{t('leads.source')}:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{t(`leads.sources.${selectedLead.source}`, selectedLead.source)}</span></div>}
+              <div><span className="text-gray-400">Status:</span> <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium ml-1', STATUS_COLORS[selectedLead.status])}>{t(`leads.statuses.${selectedLead.status}`, selectedLead.status)}</span></div>
+              {selectedLead.use_case && <div><span className="text-gray-400">{t('leads.useCase')}:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{selectedLead.use_case}</span></div>}
+              {selectedLead.estimated_volume && <div><span className="text-gray-400">{t('leads.estimatedVolume')}:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{selectedLead.estimated_volume}</span></div>}
+              {selectedLead.timeline && <div><span className="text-gray-400">{t('leads.timeline')}:</span> <span className="text-gray-800 dark:text-gray-200 ml-1">{selectedLead.timeline}</span></div>}
+            </div>
+            <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+              {selectedLead.status !== 'qualified' && selectedLead.status !== 'converted' && (
+                <button onClick={() => handleQualify(selectedLead)}
+                  className="btn-secondary flex-1 text-sm">{t('leads.qualify')}</button>
+              )}
+              {selectedLead.status !== 'converted' && (
+                <button onClick={() => setConverting(true)}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm">
+                  <ArrowRightCircleIcon className="w-4 h-4" /> {t('leads.convert')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Convert to Deal modal */}
+      {selectedLead && converting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('leads.convertTitle')}</h2>
+              <button onClick={() => setConverting(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="label">{t('leads.dealTitle')} *</label>
+                <input className="input-field w-full" value={convertData.deal_title}
+                  onChange={e => setConvertData(d => ({ ...d, deal_title: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">{t('deals.value')}</label>
+                <input type="number" step="0.01" className="input-field w-full" placeholder="0.00"
+                  value={convertData.deal_value_eur}
+                  onChange={e => setConvertData(d => ({ ...d, deal_value_eur: e.target.value }))} />
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input type="checkbox" checked={convertData.create_account}
+                    onChange={e => setConvertData(d => ({ ...d, create_account: e.target.checked }))}
+                    className="rounded border-gray-300 dark:border-gray-600" />
+                  {t('leads.createAccount')}
+                </label>
+              </div>
+              {convertData.create_account && (
+                <div>
+                  <label className="label">{t('leads.accountName')}</label>
+                  <input className="input-field w-full" value={convertData.account_name}
+                    onChange={e => setConvertData(d => ({ ...d, account_name: e.target.value }))} />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleConvert} disabled={convertSubmitting || !convertData.deal_title}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
+                <ArrowRightCircleIcon className="w-4 h-4" />
+                {convertSubmitting ? '…' : t('leads.convert')}
+              </button>
+              <button onClick={() => setConverting(false)} className="btn-secondary">{t('common.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

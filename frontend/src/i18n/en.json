@@ -85,6 +85,8 @@
       "converted": "Converted",
       "lost": "Lost"
     },
+    "companyName": "Company Name",
+    "contactName": "Contact Name",
     "company": "Company",
     "contact": "Contact",
     "qualify": "Qualify",
@@ -235,7 +237,14 @@
       "completed": "Completed"
     },
     "markComplete": "Mark Complete",
-    "overdue": "Overdue"
+    "overdue": "Overdue",
+    "relatedTo": "Related To",
+    "relatedTypes": {
+      "deal": "Deal",
+      "lead": "Lead",
+      "contact": "Contact",
+      "account": "Account"
+    }
   },
   "reports": {
     "title": "Reports",

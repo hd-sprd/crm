@@ -7,6 +7,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { accountsApi } from '../api/accounts'
 import { dealsApi } from '../api/deals'
+import { contactsApi } from '../api/contacts'
 import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
 import ActivityFeed from '../components/ActivityFeed'
@@ -34,6 +35,7 @@ export default function AccountDetail() {
   const navigate = useNavigate()
   const [account, setAccount] = useState(null)
   const [deals, setDeals] = useState([])
+  const [contacts, setContacts] = useState([])
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -52,8 +54,9 @@ export default function AccountDetail() {
     Promise.all([
       accountsApi.get(id),
       dealsApi.list({ account_id: Number(id), limit: 50 }),
+      contactsApi.list({ account_id: Number(id), limit: 100 }),
     ])
-      .then(([a, d]) => { setAccount(a); setDeals(d) })
+      .then(([a, d, c]) => { setAccount(a); setDeals(d); setContacts(c) })
       .finally(() => setLoading(false))
 
   const loadActivities = () =>
@@ -238,6 +241,39 @@ export default function AccountDetail() {
                           € {Number(d.value_eur).toLocaleString()}
                         </span>
                       )}
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+          </div>
+
+          {/* Contacts */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
+              {t('accounts.contacts')} ({contacts.length})
+            </h2>
+            {contacts.length === 0
+              ? <p className="text-sm text-gray-400">No contacts yet.</p>
+              : (
+                <div className="space-y-2">
+                  {contacts.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => navigate(`/contacts/${c.id}`)}
+                      className="w-full text-left flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {[c.first_name, c.last_name].filter(Boolean).join(' ') || '—'}
+                        </span>
+                        {c.is_primary && (
+                          <span className="ml-2 text-xs bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 px-1.5 py-0.5 rounded">
+                            Primary
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400">{c.email || c.phone || ''}</span>
                     </button>
                   ))}
                 </div>

@@ -85,6 +85,8 @@
       "converted": "Konvertiert",
       "lost": "Verloren"
     },
+    "companyName": "Unternehmensname",
+    "contactName": "Kontaktname",
     "company": "Unternehmen",
     "contact": "Kontakt",
     "qualify": "Qualifizieren",
@@ -235,7 +237,14 @@
       "completed": "Erledigt"
     },
     "markComplete": "Als erledigt markieren",
-    "overdue": "Überfällig"
+    "overdue": "Überfällig",
+    "relatedTo": "Verknüpft mit",
+    "relatedTypes": {
+      "deal": "Deal",
+      "lead": "Lead",
+      "contact": "Kontakt",
+      "account": "Account"
+    }
   },
   "reports": {
     "title": "Berichte",
