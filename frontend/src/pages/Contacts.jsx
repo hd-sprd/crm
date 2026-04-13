@@ -9,6 +9,7 @@ import clsx from 'clsx'
 import useBulkSelect from '../hooks/useBulkSelect'
 import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
+import AccountSelect from '../components/AccountSelect'
 
 const PAGE_SIZE = 50
 
@@ -26,6 +27,7 @@ export default function Contacts() {
 
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const { register, handleSubmit, reset } = useForm()
+  const [newContactAccountId, setNewContactAccountId] = useState('')
   const bulk = useBulkSelect(contacts)
 
   useEffect(() => { settingsApi.listCustomFields('contact').then(setCustomFieldDefs).catch(() => {}) }, [])
@@ -61,9 +63,9 @@ export default function Contacts() {
 
   const onSubmit = async (data) => {
     try {
-      await contactsApi.create({ ...data, account_id: Number(data.account_id) })
+      await contactsApi.create({ ...data, account_id: newContactAccountId || undefined })
       toast.success('Contact created!')
-      reset(); setShowForm(false); fetch(page)
+      reset(); setNewContactAccountId(''); setShowForm(false); fetch(page)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error')
     }
@@ -103,8 +105,8 @@ export default function Contacts() {
       {showForm && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div><label className="label">{t('contacts.account')} ID</label>
-              <input type="number" className="input-field w-full" required {...register('account_id')} /></div>
+            <div><label className="label">{t('contacts.account')}</label>
+              <AccountSelect value={newContactAccountId} onChange={setNewContactAccountId} required /></div>
             <div><label className="label">{t('contacts.firstName')}</label>
               <input className="input-field w-full" required {...register('first_name')} /></div>
             <div><label className="label">{t('contacts.lastName')}</label>

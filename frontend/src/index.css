@@ -2,56 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Material Symbols Outlined (Stitch icon set, optional) ──────────────── */
+/* Heroicons bleiben aktiv; Material Symbols nur für explizite Nutzung */
+
 @layer base {
   html {
     @apply antialiased;
   }
+
   body {
-    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    /* surface (#f9f9f9) als Seitenhintergrund – Stitch "No-Line" Tonal Layering */
+    @apply bg-gray-50 dark:bg-gray-900 text-on-surface dark:text-gray-100;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Keine reinen Schwarz-Texte – immer on-surface (#323232) */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-on-surface dark:text-gray-100 tracking-tight;
   }
 }
 
 @layer components {
+
+  /* ── Inputs ──────────────────────────────────────────────────────────────
+     Default: surface-container-highest bg (kein sichtbarer Border)
+     Focus:   secondary outline (Ghost Border pattern)                       */
   .input-field {
-    @apply block rounded-lg border border-gray-300 dark:border-gray-600
-           bg-white dark:bg-gray-700
-           text-gray-900 dark:text-gray-100
-           placeholder-gray-400 dark:placeholder-gray-500
-           shadow-sm
+    @apply block rounded-lg
+           bg-gray-300 dark:bg-gray-700
+           border border-transparent
+           text-on-surface dark:text-gray-100
+           placeholder-gray-500 dark:placeholder-gray-500
            py-2 px-3
            text-sm
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500
+           focus:outline-none
+           focus:border-brand-600 focus:ring-1 focus:ring-brand-600/20
            transition-colors;
   }
 
+  /* ── Labels ─────────────────────────────────────────────────────────────
+     label-sm: uppercase + tracking – Stitch "Editorial Precision"          */
   .label {
-    @apply block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1;
+    @apply block text-[10px] font-semibold uppercase tracking-widest
+           text-gray-600 dark:text-gray-400 mb-1;
   }
 
+  /* ── Buttons ─────────────────────────────────────────────────────────────
+     Primary: gradient secondary→secondary-dim ("machined" look)
+     Secondary: secondary-container bg (subdued)                            */
   .btn-primary {
     @apply inline-flex items-center justify-center
-           px-4 py-2 rounded-lg text-sm font-medium
-           bg-brand-600 hover:bg-brand-700
-           text-white
-           shadow-sm
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
+           px-4 py-2 rounded-md text-sm font-semibold
+           text-on-secondary
+           focus:outline-none focus:ring-2 focus:ring-brand-600/40 focus:ring-offset-2
            disabled:opacity-50 disabled:cursor-not-allowed
-           transition-colors;
+           transition-all active:scale-[0.98];
+    background: linear-gradient(135deg, #005ac6 0%, #004faf 100%);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0063db 0%, #005ac6 100%);
   }
 
   .btn-secondary {
     @apply inline-flex items-center justify-center
-           px-4 py-2 rounded-lg text-sm font-medium
-           bg-white dark:bg-gray-700
-           border border-gray-300 dark:border-gray-600
-           text-gray-700 dark:text-gray-200
-           shadow-sm
-           hover:bg-gray-50 dark:hover:bg-gray-600
-           focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
-           transition-colors;
+           px-4 py-2 rounded-md text-sm font-semibold
+           bg-brand-100 dark:bg-gray-700
+           text-brand-700 dark:text-brand-300
+           hover:bg-brand-200 dark:hover:bg-gray-600
+           focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-all active:scale-[0.98];
   }
 
+  /* ── Cards ───────────────────────────────────────────────────────────────
+     surface-container-lowest (#fff) auf surface (#f9f9f9) → "Soft Lift"
+     Kein border-color – tonal difference ersetzt die Linie (No-Line Rule)  */
   .card {
-    @apply bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm;
+    @apply bg-white dark:bg-gray-800 rounded-xl
+           border border-gray-200 dark:border-gray-700;
+    /* Kein shadow-sm auf cards – shadows nur für floating elements */
+  }
+
+  /* ── Glass Header ────────────────────────────────────────────────────────
+     Glassmorphism für sticky/persistent UI-Elemente                        */
+  .glass {
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl;
+  }
+
+  /* ── Stat-Badge ──────────────────────────────────────────────────────────
+     Pill-Badges für Metriken (secondary-container bg)                      */
+  .badge-primary {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full
+           text-[10px] font-bold uppercase tracking-widest
+           bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300;
+  }
+
+  /* ── Table Headers ───────────────────────────────────────────────────────
+     surface-container-high bg + label-sm uppercase (Stitch Data Tables)   */
+  .table-header {
+    @apply bg-gray-300 dark:bg-gray-700
+           text-[10px] font-semibold uppercase tracking-widest
+           text-gray-600 dark:text-gray-400
+           px-4 py-3;
+  }
+
+  /* ── Floating shadows (modals, popovers only) ────────────────────────────
+     4% opacity, 32px blur – Stitch ambient shadow spec                     */
+  .shadow-float {
+    box-shadow: 0 8px 32px 0 rgba(50, 50, 50, 0.08);
   }
 }
