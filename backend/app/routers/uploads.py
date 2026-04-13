@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Request
@@ -81,6 +82,11 @@ class AttachmentOut(BaseModel):
     file_size: int
     has_thumbnail: bool
     uploaded_by: Optional[int]
+    # Pre-signed Supabase CDN URLs (1 h expiry). Present when Supabase
+    # storage is active — the frontend uses them directly so no N+1
+    # backend round-trips are needed per thumbnail/file.
+    file_url: Optional[str] = None
+    thumb_url: Optional[str] = None
     model_config = {"from_attributes": True}
 
 
@@ -198,7 +204,41 @@ async def list_attachments(
             and_(Attachment.entity_type == entity_type, Attachment.entity_id == entity_id)
         ).order_by(Attachment.created_at.desc())
     )
-    return result.scalars().all()
+    attachments = result.scalars().all()
+
+    if not storage_svc.is_supabase() or not attachments:
+        return list(attachments)
+
+    # Pre-generate 1-hour signed CDN URLs for all attachments in parallel.
+    # The supabase-py storage client is synchronous, so we push each call
+    # into the default thread-pool executor to avoid blocking the event loop.
+    loop = asyncio.get_running_loop()
+
+    async def _sign(bucket: str, path: str) -> Optional[str]:
+        return await loop.run_in_executor(
+            None, lambda: storage_svc.create_signed_url(bucket, path, 3600)
+        )
+
+    async def _none() -> None:
+        return None
+
+    file_tasks = [_sign("attachments", att.stored_name) for att in attachments]
+    thumb_tasks = [
+        _sign("thumbnails", att.stored_name + ".jpg") if att.has_thumbnail
+        else _none()
+        for att in attachments
+    ]
+
+    file_urls = await asyncio.gather(*file_tasks)
+    thumb_urls = await asyncio.gather(*thumb_tasks)
+
+    out: list[AttachmentOut] = []
+    for att, fu, tu in zip(attachments, file_urls, thumb_urls):
+        item = AttachmentOut.model_validate(att)
+        item.file_url = fu
+        item.thumb_url = tu if att.has_thumbnail else None
+        out.append(item)
+    return out
 
 
 @router.get("/{attachment_id}/file")

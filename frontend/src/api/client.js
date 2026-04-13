@@ -1,5 +1,12 @@
 import axios from 'axios'
 
+// Strip the /api/v1 suffix to get the raw backend origin.
+// Used by fileUrl / thumbUrl / pdfUrl helpers that construct URLs for
+// <img src> / <a href> — these bypass axios and must be absolute in
+// production where frontend and backend live on different domains.
+// Falls back to '' so relative URLs keep working via Vite's dev proxy.
+export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/api\/v1\/?$/, '')
+
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   headers: { 'Content-Type': 'application/json' },

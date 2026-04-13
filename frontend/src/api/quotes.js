@@ -1,4 +1,4 @@
-import client from './client'
+import client, { BACKEND_URL } from './client'
 
 export const quotesApi = {
   list: (params) => client.get('/quotes', { params }).then(r => r.data),
@@ -9,7 +9,7 @@ export const quotesApi = {
   accept: (id) => client.post(`/quotes/${id}/accept`).then(r => r.data),
   pdfUrl: (id) => {
     const token = localStorage.getItem('crm_token')
-    return `/api/v1/quotes/${id}/pdf${token ? `?token=${token}` : ''}`
+    return `${BACKEND_URL}/api/v1/quotes/${id}/pdf${token ? `?token=${token}` : ''}`
   },
   uploadImage: (dealId, file) => {
     const form = new FormData()
@@ -21,6 +21,8 @@ export const quotesApi = {
   imageUrl: (path) => {
     if (!path) return ''
     const token = localStorage.getItem('crm_token')
-    return `${path}${token ? `?token=${token}` : ''}`
+    // path may be an absolute URL (Supabase CDN) or a relative API path
+    const url = path.startsWith('http') ? path : `${BACKEND_URL}${path}`
+    return `${url}${token ? `?token=${token}` : ''}`
   },
 }

@@ -1,4 +1,4 @@
-import client from './client'
+import client, { BACKEND_URL } from './client'
 
 export const settingsApi = {
   // Workflows
@@ -41,6 +41,9 @@ export const settingsApi = {
   logoUrl: (url) => {
     if (!url) return null
     const token = localStorage.getItem('crm_token')
-    return `${url}${token ? `?token=${token}` : ''}`
+    // url stored in DB is a relative API path (/api/v1/settings/quote-template/logo/…)
+    // — must be prefixed with the backend origin in production.
+    const fullUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url}`
+    return `${fullUrl}${token ? `?token=${token}` : ''}`
   },
 }

@@ -1,4 +1,4 @@
-import client from './client'
+import client, { BACKEND_URL } from './client'
 
 export const uploadsApi = {
   list: (entityType, entityId) =>
@@ -16,11 +16,11 @@ export const uploadsApi = {
 
   fileUrl: (id) => {
     const token = localStorage.getItem('crm_token')
-    return `/api/v1/uploads/${id}/file${token ? `?token=${token}` : ''}`
+    return `${BACKEND_URL}/api/v1/uploads/${id}/file${token ? `?token=${token}` : ''}`
   },
   thumbUrl: (id) => {
     const token = localStorage.getItem('crm_token')
-    return `/api/v1/uploads/${id}/thumb${token ? `?token=${token}` : ''}`
+    return `${BACKEND_URL}/api/v1/uploads/${id}/thumb${token ? `?token=${token}` : ''}`
   },
 
   delete: (id) => client.delete(`/uploads/${id}`),

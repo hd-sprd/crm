@@ -33,7 +33,7 @@ function LightboxModal({ att, onClose }) {
           <XMarkIcon className="w-5 h-5" />
         </button>
         <img
-          src={uploadsApi.fileUrl(att.id)}
+          src={att.file_url || uploadsApi.fileUrl(att.id)}
           alt={att.original_name}
           className="max-w-full max-h-[85vh] object-contain rounded-lg"
         />
@@ -154,12 +154,12 @@ export default function AttachmentGallery({ entityType, entityId }) {
                 onClick={() => setLightbox(att)}
               >
                 <img
-                  src={att.has_thumbnail ? uploadsApi.thumbUrl(att.id) : uploadsApi.fileUrl(att.id)}
+                  src={att.thumb_url || (att.has_thumbnail ? uploadsApi.thumbUrl(att.id) : uploadsApi.fileUrl(att.id))}
                   alt={att.original_name}
                   className="w-full h-full object-cover transition-transform group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-end justify-between p-1.5 opacity-0 group-hover:opacity-100">
-                  <a href={uploadsApi.fileUrl(att.id)} download onClick={e => e.stopPropagation()}
+                  <a href={att.file_url || uploadsApi.fileUrl(att.id)} download onClick={e => e.stopPropagation()}
                     className="p-1 bg-white/90 rounded text-gray-700 hover:bg-white">
                     <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                   </a>
@@ -189,7 +189,7 @@ export default function AttachmentGallery({ entityType, entityId }) {
                   <p className="text-xs text-gray-400">{formatBytes(att.file_size)}</p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <a href={uploadsApi.fileUrl(att.id)} download
+                  <a href={att.file_url || uploadsApi.fileUrl(att.id)} download
                     className="p-1 text-gray-400 hover:text-brand-600 transition-colors">
                     <ArrowDownTrayIcon className="w-3.5 h-3.5" />
                   </a>

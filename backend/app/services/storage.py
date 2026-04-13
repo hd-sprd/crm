@@ -75,7 +75,7 @@ async def download(bucket: str, path: str) -> bytes | None:
     return None
 
 
-def create_signed_url(bucket: str, path: str, expires_in: int = 120) -> str | None:
+def create_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str | None:
     """Return a short-lived Supabase signed URL for *bucket/path*, or None on error.
 
     The browser fetches the file directly from Supabase CDN — no proxying through
