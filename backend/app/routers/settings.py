@@ -105,20 +105,26 @@ async def list_workflows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
+    wf_result = await db.execute(
         select(Workflow).order_by(Workflow.is_default.desc(), Workflow.id)
     )
-    workflows = result.scalars().unique().all()
-    # Ensure stages are loaded
+    workflows = wf_result.scalars().unique().all()
+    if not workflows:
+        return []
+    # Single query for ALL stages across all workflows (avoids N+1)
+    wf_ids = [wf.id for wf in workflows]
+    stages_result = await db.execute(
+        select(WorkflowStage)
+        .where(WorkflowStage.workflow_id.in_(wf_ids))
+        .order_by(WorkflowStage.workflow_id, WorkflowStage.stage_order)
+    )
+    stages_by_wf: dict[int, list] = {}
+    for s in stages_result.scalars().all():
+        stages_by_wf.setdefault(s.workflow_id, []).append(s)
     out = []
     for wf in workflows:
-        stages_result = await db.execute(
-            select(WorkflowStage)
-            .where(WorkflowStage.workflow_id == wf.id)
-            .order_by(WorkflowStage.stage_order)
-        )
         wf_dict = WorkflowOut.model_validate(wf).model_dump()
-        wf_dict["stages"] = [WorkflowStageOut.model_validate(s) for s in stages_result.scalars().all()]
+        wf_dict["stages"] = [WorkflowStageOut.model_validate(s) for s in stages_by_wf.get(wf.id, [])]
         out.append(wf_dict)
     return out
 

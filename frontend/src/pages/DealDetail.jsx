@@ -79,14 +79,15 @@ export default function DealDetail() {
     Promise.all([
       dealsApi.get(id),
       quotesApi.list({ deal_id: id }),
+      settingsApi.listWorkflows().catch(() => []),
     ])
-      .then(([d, q]) => {
+      .then(([d, q, wfs]) => {
         setDeal(d)
         setQuotes(q)
+        // Stages aus dem bereits gecachten listWorkflows – kein sequenzieller Extra-Call
         if (d.workflow_id) {
-          settingsApi.getWorkflow(d.workflow_id)
-            .then(wf => setWorkflowStages(wf.stages || []))
-            .catch(() => {})
+          const wf = wfs.find(w => w.id === d.workflow_id)
+          setWorkflowStages(wf?.stages || [])
         }
       })
       .finally(() => setLoading(false))

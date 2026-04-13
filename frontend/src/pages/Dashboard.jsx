@@ -67,7 +67,8 @@ export default function Dashboard() {
       const def = wfs.find(w => w.is_default) || wfs[0]
       if (def) {
         setSelectedWorkflowId(def.id)
-        settingsApi.getWorkflow(def.id).then(wf => setWorkflowStages(wf.stages || [])).catch(() => {})
+        // listWorkflows gibt stages bereits mit zurück – kein zweiter API-Call nötig
+        setWorkflowStages(def.stages || [])
         loadDeals(def.id, params)
       } else {
         loadDeals(null, params)
@@ -78,7 +79,9 @@ export default function Dashboard() {
   const handleWorkflowChange = (id) => {
     const numId = Number(id)
     setSelectedWorkflowId(numId)
-    settingsApi.getWorkflow(numId).then(wf => setWorkflowStages(wf.stages || [])).catch(() => {})
+    // Stages aus dem bereits geladenen workflows-State – kein Extra-Call
+    const wf = workflows.find(w => w.id === numId)
+    setWorkflowStages(wf?.stages || [])
     const isManager = ['sales_manager', 'admin'].includes(user?.role)
     const params = isManager ? {} : { assigned_to: user?.id }
     loadDeals(numId, params)
