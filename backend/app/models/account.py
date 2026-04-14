@@ -6,8 +6,8 @@ from app.database import Base
 
 
 class AccountType(str, enum.Enum):
-    b2b = "B2B"
-    b2b2c = "B2B2C"
+    b2b = "b2b"
+    b2b2c = "b2b2c"
 
 
 class AccountStatus(str, enum.Enum):

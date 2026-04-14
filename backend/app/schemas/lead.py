@@ -58,7 +58,7 @@ class LeadConvert(BaseModel):
     """Payload to convert a lead into a deal (+ optionally create account/contact)."""
     create_account: bool = True
     account_name: Optional[str] = None
-    account_type: str = "B2B"
+    account_type: str = "b2b"
     deal_title: str
     deal_value_eur: Optional[float] = None
     assigned_to: Optional[int] = None

@@ -128,8 +128,8 @@ export default function Accounts() {
         </select>
         <select className="input-field text-sm py-1.5 w-28" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All types</option>
-          <option value="B2B">B2B</option>
-          <option value="B2B2C">B2B2C</option>
+          <option value="b2b">B2B</option>
+          <option value="b2b2c">B2B2C</option>
         </select>
         <QuickDateFilter value={quickFilter} onChange={applyQuickFilter} />
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
@@ -154,8 +154,8 @@ export default function Accounts() {
               <input className="input-field w-full" required {...register('name')} /></div>
             <div><label className="label">{t('common.type')}</label>
               <select className="input-field w-full" {...register('type', { required: true })}>
-                <option value="B2B">B2B</option>
-                <option value="B2B2C">B2B2C</option>
+                <option value="b2b">B2B</option>
+                <option value="b2b2c">B2B2C</option>
               </select></div>
             <div><label className="label">{t('common.status')}</label>
               <select className="input-field w-full" {...register('status')}>
@@ -239,7 +239,7 @@ export default function Accounts() {
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-white cursor-pointer" onClick={() => navigate(`/accounts/${account.id}`)}>{account.name}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                      {account.type}
+                      {account.type?.toUpperCase()}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.industry || '—'}</td>

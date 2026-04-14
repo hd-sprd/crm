@@ -133,7 +133,7 @@ export default function AccountDetail() {
           </div>
           <div className="flex items-center gap-3 mt-1">
             <span className="text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs">
-              {account.type}
+              {account.type?.toUpperCase()}
             </span>
             <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', STATUS_COLORS[account.status])}>
               {t(`accounts.statuses.${account.status}`)}
@@ -318,7 +318,7 @@ export default function AccountDetail() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Quick facts</h3>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Type</p>
-              <span className="font-medium text-gray-800 dark:text-gray-200">{account.type}</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{account.type?.toUpperCase()}</span>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Status</p>
@@ -385,8 +385,8 @@ export default function AccountDetail() {
                 <div>
                   <label className="label">Type</label>
                   <select className="input-field w-full" value={editData.type} onChange={e => set('type', e.target.value)}>
-                    <option value="B2B">B2B</option>
-                    <option value="B2B2C">B2B2C</option>
+                    <option value="b2b">B2B</option>
+                    <option value="b2b2c">B2B2C</option>
                   </select>
                 </div>
                 <div>

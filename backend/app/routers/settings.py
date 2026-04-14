@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import Any, Optional
 from pydantic import BaseModel
 
@@ -105,28 +106,12 @@ async def list_workflows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    wf_result = await db.execute(
-        select(Workflow).order_by(Workflow.is_default.desc(), Workflow.id)
+    result = await db.execute(
+        select(Workflow)
+        .options(selectinload(Workflow.stages))
+        .order_by(Workflow.is_default.desc(), Workflow.id)
     )
-    workflows = wf_result.scalars().unique().all()
-    if not workflows:
-        return []
-    # Single query for ALL stages across all workflows (avoids N+1)
-    wf_ids = [wf.id for wf in workflows]
-    stages_result = await db.execute(
-        select(WorkflowStage)
-        .where(WorkflowStage.workflow_id.in_(wf_ids))
-        .order_by(WorkflowStage.workflow_id, WorkflowStage.stage_order)
-    )
-    stages_by_wf: dict[int, list] = {}
-    for s in stages_result.scalars().all():
-        stages_by_wf.setdefault(s.workflow_id, []).append(s)
-    out = []
-    for wf in workflows:
-        wf_dict = WorkflowOut.model_validate(wf).model_dump()
-        wf_dict["stages"] = [WorkflowStageOut.model_validate(s) for s in stages_by_wf.get(wf.id, [])]
-        out.append(wf_dict)
-    return out
+    return result.unique().scalars().all()
 
 
 @router.post("/workflows", response_model=WorkflowWithStagesOut, status_code=201)
