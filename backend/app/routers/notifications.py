@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import datetime, timezone
+from typing import Optional
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.notification import Notification
@@ -9,6 +11,22 @@ from app.models.user import User
 from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
+
+
+class NotificationItem(BaseModel):
+    id: int
+    type: str
+    title: str
+    body: Optional[str]
+    entity_type: Optional[str]
+    entity_id: Optional[int]
+    read_at: Optional[datetime]
+    created_at: datetime
+
+
+class NotificationListOut(BaseModel):
+    unread_count: int
+    items: list[NotificationItem]
 
 
 # ── Helper (called from other routers) ───────────────────────────────────────
@@ -36,13 +54,15 @@ async def create_notification(
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
-@router.get("")
+@router.get("", response_model=NotificationListOut)
 async def list_notifications(
     unread_only: bool = False,
     limit: int = Query(20, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy import func
+
     q = select(Notification).where(Notification.user_id == current_user.id)
     if unread_only:
         q = q.where(Notification.read_at.is_(None))
@@ -50,29 +70,28 @@ async def list_notifications(
     result = await db.execute(q)
     items = result.scalars().all()
 
-    unread_count_q = select(Notification).where(
+    count_q = select(func.count()).select_from(Notification).where(
         Notification.user_id == current_user.id,
         Notification.read_at.is_(None),
     )
-    unread_res = await db.execute(unread_count_q)
-    unread_count = len(unread_res.scalars().all())
+    unread_count: int = (await db.execute(count_q)).scalar_one()
 
-    return {
-        "unread_count": unread_count,
-        "items": [
-            {
-                "id": n.id,
-                "type": n.type,
-                "title": n.title,
-                "body": n.body,
-                "entity_type": n.entity_type,
-                "entity_id": n.entity_id,
-                "read_at": n.read_at,
-                "created_at": n.created_at,
-            }
+    return NotificationListOut(
+        unread_count=unread_count,
+        items=[
+            NotificationItem(
+                id=n.id,
+                type=n.type,
+                title=n.title,
+                body=n.body,
+                entity_type=n.entity_type,
+                entity_id=n.entity_id,
+                read_at=n.read_at,
+                created_at=n.created_at,
+            )
             for n in items
         ],
-    }
+    )
 
 
 @router.post("/{notification_id}/read")

@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -18,7 +19,18 @@ class SavedViewCreate(BaseModel):
     filters: dict[str, Any] = {}
 
 
-@router.get("")
+class SavedViewOut(BaseModel):
+    id: int
+    user_id: int
+    entity_type: str
+    name: str
+    filters: dict[str, Any]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("", response_model=list[SavedViewOut])
 async def list_saved_views(
     entity_type: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -32,7 +44,7 @@ async def list_saved_views(
     return result.scalars().all()
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=SavedViewOut)
 async def create_saved_view(
     payload: SavedViewCreate,
     db: AsyncSession = Depends(get_db),
