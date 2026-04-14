@@ -23,8 +23,11 @@ UPLOAD_DIR = os.environ.get(
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"),
 )
 THUMB_DIR = os.path.join(UPLOAD_DIR, "thumbnails")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(THUMB_DIR, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    os.makedirs(THUMB_DIR, exist_ok=True)
+except OSError:
+    pass  # read-only filesystem (e.g. Vercel) – Supabase Storage is used in production
 
 IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB

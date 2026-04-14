@@ -409,7 +409,6 @@ LOGO_DIR = os.path.join(
     os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")),
     "logos",
 )
-os.makedirs(LOGO_DIR, exist_ok=True)
 
 _DEFAULT_TEMPLATE = {
     "company_name": "Spreadshirt",
