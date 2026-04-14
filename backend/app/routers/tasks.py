@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, Literal
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+
+
+def _utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -42,9 +46,9 @@ async def list_tasks(
     if search:
         q = q.where(Task.title.ilike(f"%{search}%"))
     if created_after:
-        q = q.where(Task.created_at >= created_after)
+        q = q.where(Task.created_at >= _utc(created_after))
     if created_before:
-        q = q.where(Task.created_at <= created_before)
+        q = q.where(Task.created_at <= _utc(created_before))
     q = q.offset(skip).limit(limit).order_by(Task.due_date.asc().nulls_last())
     result = await db.execute(q)
     return result.scalars().all()

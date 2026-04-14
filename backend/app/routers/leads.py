@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -48,9 +52,9 @@ async def list_leads(
             Lead.contact_email.ilike(s)
         )
     if created_after:
-        q = q.where(Lead.created_at >= created_after)
+        q = q.where(Lead.created_at >= _utc(created_after))
     if created_before:
-        q = q.where(Lead.created_at <= created_before)
+        q = q.where(Lead.created_at <= _utc(created_before))
     q = q.offset(skip).limit(limit).order_by(Lead.created_at.desc())
     result = await db.execute(q)
     return result.scalars().all()

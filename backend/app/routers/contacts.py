@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update as sql_update, delete as sql_delete
 from typing import Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (assume UTC if naive)."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -44,9 +49,9 @@ async def list_contacts(
             | Contact.email.ilike(f"%{search}%")
         )
     if created_after:
-        q = q.where(Contact.created_at >= created_after)
+        q = q.where(Contact.created_at >= _utc(created_after))
     if created_before:
-        q = q.where(Contact.created_at <= created_before)
+        q = q.where(Contact.created_at <= _utc(created_before))
     q = q.offset(skip).limit(limit).order_by(Contact.last_name)
     result = await db.execute(q)
     return result.scalars().all()

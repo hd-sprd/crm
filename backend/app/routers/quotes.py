@@ -1,4 +1,8 @@
 from datetime import datetime, timezone
+
+
+def _utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,9 +46,9 @@ async def list_quotes(
     if status:
         q = q.where(Quote.status == status)
     if created_after:
-        q = q.where(Quote.created_at >= created_after)
+        q = q.where(Quote.created_at >= _utc(created_after))
     if created_before:
-        q = q.where(Quote.created_at <= created_before)
+        q = q.where(Quote.created_at <= _utc(created_before))
     result = await db.execute(q.order_by(Quote.created_at.desc()).offset(skip).limit(limit))
     return result.scalars().all()
 
