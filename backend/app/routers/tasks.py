@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import Optional, Literal
 from datetime import date, datetime, timezone
 
@@ -10,7 +11,7 @@ def _utc(dt: datetime) -> datetime:
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models.task import Task, TaskStatus, TaskPriority
+from app.models.task import Task, TaskStatus, TaskPriority, RelatedToType
 from app.models.user import User
 from app.schemas.task import TaskCreate, TaskUpdate, TaskOut
 from app.services.auth_service import get_current_user
@@ -27,6 +28,8 @@ async def list_tasks(
     priority: Optional[TaskPriority] = None,
     overdue: Optional[bool] = None,
     search: Optional[str] = None,
+    related_to_type: Optional[RelatedToType] = None,
+    related_to_id: Optional[int] = None,
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
     skip: int = 0,
@@ -34,7 +37,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Task)
+    q = select(Task).options(selectinload(Task.assigned_user))
     if status:
         q = q.where(Task.status == status)
     if assigned_to:
@@ -45,6 +48,10 @@ async def list_tasks(
         q = q.where(Task.due_date < date.today(), Task.status == TaskStatus.open)
     if search:
         q = q.where(Task.title.ilike(f"%{search}%"))
+    if related_to_type:
+        q = q.where(Task.related_to_type == related_to_type)
+    if related_to_id:
+        q = q.where(Task.related_to_id == related_to_id)
     if created_after:
         q = q.where(Task.created_at >= _utc(created_after))
     if created_before:
@@ -77,7 +84,9 @@ async def create_task(
             entity_type="task",
             entity_id=task.id,
         )
-    return task
+    # Reload with relationship so assigned_user_name is available
+    result2 = await db.execute(select(Task).options(selectinload(Task.assigned_user)).where(Task.id == task.id))
+    return result2.scalar_one()
 
 
 @router.patch("/{task_id}", response_model=TaskOut)
@@ -87,12 +96,12 @@ async def update_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Task).where(Task.id == task_id))
+    result = await db.execute(select(Task).options(selectinload(Task.assigned_user)).where(Task.id == task_id))
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     changes = {}
-    for field, value in payload.model_dump(exclude_none=True).items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
         old_val = getattr(task, field, None)
         if old_val != value:
             changes[field] = [str(old_val) if old_val is not None else None,
@@ -101,6 +110,8 @@ async def update_task(
     if changes:
         await log_event(db, entity_type="task", entity_id=task_id, action=AuditAction.update,
                         user=current_user, changes=changes)
+    await db.flush()
+    await db.refresh(task, ["assigned_user"])
     return task
 
 

@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import { PencilIcon } from '@heroicons/react/24/outline'
 import { tasksApi } from '../api/tasks'
 import toast from 'react-hot-toast'
 
@@ -10,8 +12,15 @@ const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
-export default function TaskList({ tasks = [], onUpdate }) {
+const RELATED_PATHS = {
+  deal: (id) => `/deals/${id}`,
+  account: (id) => `/accounts/${id}`,
+  lead: () => `/leads`,
+}
+
+export default function TaskList({ tasks = [], onUpdate, onEdit }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   const markComplete = async (task) => {
     try {
@@ -31,6 +40,9 @@ export default function TaskList({ tasks = [], onUpdate }) {
     <ul className="space-y-2">
       {tasks.map(task => {
         const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status === 'open'
+        const relatedPath = task.related_to_type && task.related_to_id
+          ? RELATED_PATHS[task.related_to_type]?.(task.related_to_id)
+          : null
         return (
           <li
             key={task.id}
@@ -45,13 +57,21 @@ export default function TaskList({ tasks = [], onUpdate }) {
               type="checkbox"
               checked={task.status === 'completed'}
               onChange={() => task.status === 'open' && markComplete(task)}
-              className="mt-0.5 w-4 h-4 text-brand-600 rounded"
+              className="mt-0.5 w-4 h-4 text-brand-600 rounded flex-shrink-0"
             />
             <div className="flex-1 min-w-0">
-              <p className={clsx('text-sm font-medium', task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white')}>
-                {task.title}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-1 group">
+                <p className={clsx('text-sm font-medium flex-1 min-w-0 truncate', task.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white')}>
+                  {task.title}
+                </p>
+                {onEdit && (
+                  <button onClick={() => onEdit(task)}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex-shrink-0 transition-opacity">
+                    <PencilIcon className="w-3 h-3 text-gray-400" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
                 <span className={clsx('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', PRIORITY_COLORS[task.priority])}>
                   {t(`tasks.priorities.${task.priority}`)}
                 </span>
@@ -60,6 +80,22 @@ export default function TaskList({ tasks = [], onUpdate }) {
                     {isOverdue ? `⚠ ${t('tasks.overdue')} · ` : ''}
                     {format(new Date(task.due_date), 'MMM d, yyyy')}
                   </span>
+                )}
+                {task.assigned_user_name && (
+                  <span className="text-xs text-gray-400">
+                    → {task.assigned_user_name}
+                  </span>
+                )}
+                {task.related_to_type && task.related_to_id && (
+                  relatedPath
+                    ? <button
+                        onClick={() => navigate(relatedPath)}
+                        className="text-xs text-brand-600 dark:text-brand-400 hover:underline">
+                        {t(`tasks.relatedTypes.${task.related_to_type}`)} #{task.related_to_id}
+                      </button>
+                    : <span className="text-xs text-gray-400">
+                        {t(`tasks.relatedTypes.${task.related_to_type}`)} #{task.related_to_id}
+                      </span>
                 )}
               </div>
             </div>

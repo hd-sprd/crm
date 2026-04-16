@@ -18,7 +18,17 @@ import BulkActionBar from '../components/BulkActionBar'
 import SavedViewsDropdown from '../components/SavedViewsDropdown'
 import { settingsApi } from '../api/settings'
 
-const PAGE_SIZE = 50
+const LIMIT_OPTIONS = [50, 100, 250, 500]
+
+const DATE_PRESETS = [
+  { label: 'Last 30 days', days: 30 },
+  { label: 'Last 3 months', days: 90 },
+  { label: 'Last year', days: 365 },
+]
+
+function isoDate(d) {
+  return d.toISOString().slice(0, 10)
+}
 
 export default function Deals() {
   const { t, i18n } = useTranslation()
@@ -28,6 +38,7 @@ export default function Deals() {
   const [showNew, setShowNew] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
+  const [limitSize, setLimitSize] = useState(50)
 
   // Workflow state
   const [workflows, setWorkflows] = useState([])
@@ -40,6 +51,7 @@ export default function Deals() {
   const [typeFilter, setTypeFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [activePreset, setActivePreset] = useState('')
 
   const [users, setUsers] = useState([])
   const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
@@ -53,9 +65,10 @@ export default function Deals() {
 
   const stageLabel = (stage) => i18n.language === 'de' ? stage.label_de : stage.label_en
 
-  const fetch = useCallback((p, workflowId) => {
+  const fetch = useCallback((p, workflowId, overrideLimit) => {
     setLoading(true)
-    const params = { skip: (p - 1) * PAGE_SIZE, limit: PAGE_SIZE }
+    const lim = overrideLimit ?? limitSize
+    const params = { skip: (p - 1) * lim, limit: lim }
     if (stageFilter) params.stage = stageFilter
     if (typeFilter) params.type = typeFilter
     if (search) params.search = search
@@ -63,9 +76,9 @@ export default function Deals() {
     if (dateTo) params.created_before = dateTo + 'T23:59:59'
     if (workflowId) params.workflow_id = workflowId
     dealsApi.list(params)
-      .then(data => { setDeals(data); setHasMore(data.length === PAGE_SIZE) })
+      .then(data => { setDeals(data); setHasMore(data.length === lim) })
       .finally(() => setLoading(false))
-  }, [search, stageFilter, typeFilter, dateFrom, dateTo])
+  }, [search, stageFilter, typeFilter, dateFrom, dateTo, limitSize])
 
   // Load workflows on mount — listWorkflows already includes stages, so set both at once
   useEffect(() => {
@@ -102,8 +115,30 @@ export default function Deals() {
   const applyFilters = () => { setPage(1); fetch(1, selectedWorkflowId) }
   const hasFilter = search || stageFilter || typeFilter || dateFrom || dateTo
   const clearFilters = () => {
-    setSearch(''); setStageFilter(''); setTypeFilter(''); setDateFrom(''); setDateTo('')
+    setSearch(''); setStageFilter(''); setTypeFilter('')
+    setDateFrom(''); setDateTo(''); setActivePreset('')
     setPage(1); fetch(1, selectedWorkflowId)
+  }
+
+  const applyPreset = (preset) => {
+    const to = new Date()
+    const from = new Date()
+    from.setDate(from.getDate() - preset.days)
+    const f = isoDate(from)
+    const t2 = isoDate(to)
+    setDateFrom(f); setDateTo(t2); setActivePreset(preset.label)
+    setPage(1)
+    // fetch with new dates directly since state update is async
+    setLoading(true)
+    const lim = limitSize
+    const params = { skip: 0, limit: lim, created_after: f, created_before: t2 + 'T23:59:59' }
+    if (stageFilter) params.stage = stageFilter
+    if (typeFilter) params.type = typeFilter
+    if (search) params.search = search
+    if (selectedWorkflowId) params.workflow_id = selectedWorkflowId
+    dealsApi.list(params)
+      .then(data => { setDeals(data); setHasMore(data.length === lim) })
+      .finally(() => setLoading(false))
   }
 
   const handleApplySavedView = (filters) => {
@@ -112,6 +147,7 @@ export default function Deals() {
     if (filters.type !== undefined) setTypeFilter(filters.type || '')
     if (filters.dateFrom !== undefined) setDateFrom(filters.dateFrom || '')
     if (filters.dateTo !== undefined) setDateTo(filters.dateTo || '')
+    setActivePreset('')
     setPage(1); fetch(1, selectedWorkflowId)
   }
 
@@ -239,11 +275,36 @@ export default function Deals() {
           <option value="barter">Barter</option>
           <option value="custom">Custom</option>
         </select>
+        <div className="flex items-center gap-1">
+          {DATE_PRESETS.map(p => (
+            <button
+              key={p.label}
+              onClick={() => applyPreset(p)}
+              className={clsx(
+                'text-xs px-2.5 py-1.5 rounded-lg border transition-colors',
+                activePreset === p.label
+                  ? 'bg-brand-600 text-white border-brand-600'
+                  : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              )}
+            >{p.label}</button>
+          ))}
+        </div>
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
-          onChange={e => setDateFrom(e.target.value)} title="Created from" />
+          onChange={e => { setDateFrom(e.target.value); setActivePreset('') }} title="Created from" />
         <span className="text-gray-400 text-xs">–</span>
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateTo}
-          onChange={e => setDateTo(e.target.value)} title="Created to" />
+          onChange={e => { setDateTo(e.target.value); setActivePreset('') }} title="Created to" />
+        <select
+          className="input-field text-sm py-1.5 w-24"
+          value={limitSize}
+          onChange={e => {
+            const l = Number(e.target.value)
+            setLimitSize(l); setPage(1); fetch(1, selectedWorkflowId, l)
+          }}
+          title="Results per page"
+        >
+          {LIMIT_OPTIONS.map(n => <option key={n} value={n}>{n} rows</option>)}
+        </select>
         <button onClick={applyFilters} className="btn-secondary text-sm px-3 py-1.5">Apply</button>
         {hasFilter && (
           <button onClick={clearFilters} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">

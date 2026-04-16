@@ -56,11 +56,36 @@ class DealStageChange(BaseModel):
     lost_reason: Optional[str] = None
 
 
+class DealAccountOut(BaseModel):
+    id: int
+    name: str
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    country: Optional[str] = None
+    address: Optional[str] = None
+    segment: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DealContactOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    title: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class DealOut(BaseModel):
     id: int
     title: str
     account_id: int
     contact_id: Optional[int]
+    account: Optional[DealAccountOut] = None
+    contact: Optional[DealContactOut] = None
     assigned_to: Optional[int]
     type: DealType
     stage: str

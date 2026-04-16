@@ -10,7 +10,7 @@ import { PlusIcon, TrashIcon, PlayIcon, BookmarkIcon, XMarkIcon, ChevronDownIcon
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 
-const PIE_COLORS = ['#e63329','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4']
+const PIE_COLORS = ['#fca5a5','#93c5fd','#6ee7b7','#fcd34d','#c4b5fd','#67e8f9']
 
 function KpiCard({ label, value, sub, color = 'brand' }) {
   return (
@@ -209,7 +209,7 @@ export default function Reports() {
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
               <Tooltip formatter={(v) => [v, 'Deals']} />
-              <Bar dataKey="count" fill="#e63329" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="count" fill="#fca5a5" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -236,7 +236,7 @@ export default function Reports() {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" fill="#93c5fd" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

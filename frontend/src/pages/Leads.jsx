@@ -43,9 +43,9 @@ export default function Leads() {
   const [users, setUsers] = useState([])
   // Lead detail modal
   const [selectedLead, setSelectedLead] = useState(null)
-  // Convert modal
+  // Convert to Account modal
   const [converting, setConverting] = useState(false)
-  const [convertData, setConvertData] = useState({ deal_title: '', create_account: true, account_name: '', deal_value_eur: '' })
+  const [convertData, setConvertData] = useState({ account_name: '', account_type: 'b2b' })
   const [convertSubmitting, setConvertSubmitting] = useState(false)
 
   const [search, setSearch] = useState('')
@@ -119,10 +119,8 @@ export default function Leads() {
   const openLead = (lead) => {
     setSelectedLead(lead)
     setConvertData({
-      deal_title: lead.company_name ? `${lead.company_name} Deal` : '',
-      create_account: true,
       account_name: lead.company_name || '',
-      deal_value_eur: '',
+      account_type: 'b2b',
     })
   }
 
@@ -138,20 +136,17 @@ export default function Leads() {
   }
 
   const handleConvert = async () => {
-    if (!convertData.deal_title) return
     setConvertSubmitting(true)
     try {
-      const deal = await leadsApi.convert(selectedLead.id, {
-        deal_title: convertData.deal_title,
-        create_account: convertData.create_account,
-        account_name: convertData.create_account ? convertData.account_name : undefined,
-        deal_value_eur: convertData.deal_value_eur ? Number(convertData.deal_value_eur) : undefined,
+      const account = await leadsApi.convertToAccount(selectedLead.id, {
+        account_name: convertData.account_name || undefined,
+        account_type: convertData.account_type,
       })
       toast.success(t('leads.convert') + ' ✓')
       setSelectedLead(null)
       setConverting(false)
       fetch(page)
-      navigate(`/deals/${deal.id}`)
+      navigate(`/accounts/${account.id}`)
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error converting lead')
     } finally {
@@ -334,7 +329,7 @@ export default function Leads() {
         </div>
       )}
 
-      {/* Convert to Deal modal */}
+      {/* Convert to Account modal */}
       {selectedLead && converting && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md space-y-4">
@@ -346,34 +341,21 @@ export default function Leads() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="label">{t('leads.dealTitle')} *</label>
-                <input className="input-field w-full" value={convertData.deal_title}
-                  onChange={e => setConvertData(d => ({ ...d, deal_title: e.target.value }))} />
+                <label className="label">{t('leads.accountName')}</label>
+                <input className="input-field w-full" value={convertData.account_name}
+                  onChange={e => setConvertData(d => ({ ...d, account_name: e.target.value }))} />
               </div>
               <div>
-                <label className="label">{t('deals.value')}</label>
-                <input type="number" step="0.01" className="input-field w-full" placeholder="0.00"
-                  value={convertData.deal_value_eur}
-                  onChange={e => setConvertData(d => ({ ...d, deal_value_eur: e.target.value }))} />
+                <label className="label">{t('leads.accountType')}</label>
+                <select className="input-field w-full" value={convertData.account_type}
+                  onChange={e => setConvertData(d => ({ ...d, account_type: e.target.value }))}>
+                  <option value="b2b">B2B</option>
+                  <option value="b2b2c">B2B2C</option>
+                </select>
               </div>
-              <div>
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                  <input type="checkbox" checked={convertData.create_account}
-                    onChange={e => setConvertData(d => ({ ...d, create_account: e.target.checked }))}
-                    className="rounded border-gray-300 dark:border-gray-600" />
-                  {t('leads.createAccount')}
-                </label>
-              </div>
-              {convertData.create_account && (
-                <div>
-                  <label className="label">{t('leads.accountName')}</label>
-                  <input className="input-field w-full" value={convertData.account_name}
-                    onChange={e => setConvertData(d => ({ ...d, account_name: e.target.value }))} />
-                </div>
-              )}
             </div>
             <div className="flex gap-2 pt-2">
-              <button onClick={handleConvert} disabled={convertSubmitting || !convertData.deal_title}
+              <button onClick={handleConvert} disabled={convertSubmitting}
                 className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
                 <ArrowRightCircleIcon className="w-4 h-4" />
                 {convertSubmitting ? '…' : t('leads.convert')}

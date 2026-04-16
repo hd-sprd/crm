@@ -62,3 +62,10 @@ class LeadConvert(BaseModel):
     deal_title: str
     deal_value_eur: Optional[float] = None
     assigned_to: Optional[int] = None
+
+
+class LeadConvertToAccount(BaseModel):
+    """Payload to convert a lead into an Account (without creating a Deal)."""
+    account_name: Optional[str] = None
+    account_type: str = "b2b"
+    assigned_to: Optional[int] = None

@@ -283,6 +283,9 @@ async def _import_leads(rows: list[dict], db: AsyncSession) -> tuple[int, int, l
             volume_raw = row.get("estimated_volume", "")
             try:
                 volume = int(float(volume_raw)) if volume_raw else None
+                # PostgreSQL INTEGER max is 2,147,483,647 – clamp out-of-range values
+                if volume is not None and not (0 <= volume <= 2_147_483_647):
+                    volume = None
             except (ValueError, TypeError):
                 volume = None
 
@@ -305,7 +308,13 @@ async def _import_leads(rows: list[dict], db: AsyncSession) -> tuple[int, int, l
 
 
 async def _import_deals(rows: list[dict], db: AsyncSession) -> tuple[int, int, list[str]]:
+    from app.services.deal_service import get_default_workflow_id, get_first_stage_key
     imported, skipped, errors = 0, 0, []
+
+    # Resolve default workflow + first stage once for the whole batch
+    default_workflow_id = await get_default_workflow_id(db)
+    first_stage = await get_first_stage_key(default_workflow_id, db) if default_workflow_id else "lead_received"
+
     for i, row in enumerate(rows):
         title = row.get("title", "").strip()
         if not title:
@@ -350,7 +359,8 @@ async def _import_deals(rows: list[dict], db: AsyncSession) -> tuple[int, int, l
             deal = Deal(
                 title=title,
                 account_id=account_id,
-                stage="lead_received",
+                workflow_id=default_workflow_id,
+                stage=first_stage,
                 value_eur=value,
                 probability=prob,
                 expected_close_date=close_date,
@@ -461,7 +471,12 @@ async def import_salesforce(
         imported += imp
         skipped += skp
         errors.extend(errs)
-        await db.commit()
+        try:
+            await db.commit()
+        except Exception as commit_err:
+            await db.rollback()
+            errors.append(f"Chunk {chunk_start // CHUNK_SIZE + 1}: DB error – {commit_err}")
+            imported -= imp  # rows from this chunk were rolled back
 
     return {
         "object_type": object_type,

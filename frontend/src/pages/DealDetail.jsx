@@ -524,7 +524,99 @@ export default function DealDetail() {
         </div>
 
         {/* Sidebar */}
-        <div>
+        <div className="space-y-4">
+          {/* Account card */}
+          {deal.account && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Account</h3>
+                <button
+                  onClick={() => navigate(`/accounts/${deal.account_id}`)}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                >View →</button>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">{deal.account.name}</p>
+                {deal.account.industry && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{deal.account.industry}</p>}
+              </div>
+              <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                {deal.account.country && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-400">🌍</span>
+                    <span>{deal.account.country}</span>
+                  </div>
+                )}
+                {deal.account.website && (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-gray-400 flex-shrink-0">🔗</span>
+                    <a
+                      href={deal.account.website.startsWith('http') ? deal.account.website : `https://${deal.account.website}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-brand-600 hover:underline truncate"
+                    >{deal.account.website}</a>
+                  </div>
+                )}
+                {deal.account.segment && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-400">🏷</span>
+                    <span className="capitalize">{deal.account.segment}</span>
+                  </div>
+                )}
+                {deal.account.address && (
+                  <div className="flex items-start gap-1.5">
+                    <span className="text-gray-400 flex-shrink-0 mt-0.5">📍</span>
+                    <span className="leading-snug">{deal.account.address}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Contact card */}
+          {deal.contact ? (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Contact</h3>
+                <button
+                  onClick={() => navigate(`/contacts/${deal.contact_id}`)}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+                >View →</button>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center flex-shrink-0">
+                  <UserCircleIcon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {deal.contact.first_name} {deal.contact.last_name}
+                  </p>
+                  {deal.contact.title && <p className="text-xs text-gray-500 dark:text-gray-400">{deal.contact.title}</p>}
+                </div>
+              </div>
+              <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
+                {deal.contact.email && (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <EnvelopeIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <a href={`mailto:${deal.contact.email}`} className="text-brand-600 hover:underline truncate">
+                      {deal.contact.email}
+                    </a>
+                  </div>
+                )}
+                {deal.contact.phone && (
+                  <div className="flex items-center gap-1.5">
+                    <PhoneIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <a href={`tel:${deal.contact.phone}`} className="hover:underline">{deal.contact.phone}</a>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Contact</h3>
+              <p className="text-xs text-gray-400">No contact linked</p>
+            </div>
+          )}
+
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
             <AttachmentGallery entityType="deal" entityId={Number(id)} />
           </div>

@@ -3,16 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeftIcon, PencilIcon, XMarkIcon, CheckIcon,
-  BuildingOfficeIcon, GlobeAltIcon, MapPinIcon, BriefcaseIcon,
+  BuildingOfficeIcon, GlobeAltIcon, MapPinIcon, BriefcaseIcon, PlusIcon,
 } from '@heroicons/react/24/outline'
 import { accountsApi } from '../api/accounts'
 import { dealsApi } from '../api/deals'
 import { contactsApi } from '../api/contacts'
 import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
+import { tasksApi } from '../api/tasks'
+import { usersApi } from '../api/users'
 import ActivityFeed from '../components/ActivityFeed'
 import AttachmentGallery from '../components/AttachmentGallery'
 import AuditLogTab from '../components/AuditLogTab'
+import TaskList from '../components/TaskList'
+import TaskEditModal from '../components/TaskEditModal'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -45,9 +49,36 @@ export default function AccountDetail() {
   const [customFieldDefs, setCustomFieldDefs] = useState([])
   const [customFieldValues, setCustomFieldValues] = useState({})
   const [historyTab, setHistoryTab] = useState('activity')
+  const [users, setUsers] = useState([])
+
+  // Tasks
+  const [tasks, setTasks] = useState([])
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [newTask, setNewTask] = useState({ title: '', due_date: '', priority: 'medium' })
+  const [savingTask, setSavingTask] = useState(false)
+  const [editingTask, setEditingTask] = useState(null)
+
+  // New Deal modal
+  const [showDealForm, setShowDealForm] = useState(false)
+  const [newDeal, setNewDeal] = useState({ title: '', value_eur: '', type: 'standard', workflow_id: '', currency: 'EUR', probability: '0', product_type: '', quantity: '', expected_close_date: '' })
+  const [savingDeal, setSavingDeal] = useState(false)
+  const [workflows, setWorkflows] = useState([])
+  const [currencies, setCurrencies] = useState({ base_currency: 'EUR', currencies: { EUR: { name: 'Euro', symbol: '€', rate: 1 } } })
+
+  // New Contact modal
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [newContact, setNewContact] = useState({ first_name: '', last_name: '', email: '', phone: '', is_primary: false })
+  const [savingContact, setSavingContact] = useState(false)
 
   useEffect(() => {
     settingsApi.listCustomFields('account').then(setCustomFieldDefs).catch(() => {})
+    usersApi.list().then(setUsers).catch(() => {})
+    settingsApi.listWorkflows().then(wfs => {
+      setWorkflows(wfs)
+      const def = wfs.find(w => w.is_default) ?? wfs[0]
+      if (def) setNewDeal(d => ({ ...d, workflow_id: String(def.id) }))
+    }).catch(() => {})
+    settingsApi.getCurrencies().then(setCurrencies).catch(() => {})
   }, [])
 
   const load = () =>
@@ -63,9 +94,14 @@ export default function AccountDetail() {
     activitiesApi.list({ related_to_type: 'account', related_to_id: Number(id), limit: 100 })
       .then(setActivities).catch(() => {})
 
+  const loadTasks = () =>
+    tasksApi.list({ related_to_type: 'account', related_to_id: Number(id), limit: 50 })
+      .then(setTasks).catch(() => {})
+
   useEffect(() => {
     load()
     loadActivities()
+    loadTasks()
   }, [id])
 
   const openEdit = () => {
@@ -80,6 +116,7 @@ export default function AccountDetail() {
       address: account.address ?? '',
       jira_ticket_id: account.jira_ticket_id ?? '',
       notes: account.notes ?? '',
+      account_manager_id: account.account_manager_id ?? '',
     })
     setCustomFieldValues(account.custom_fields || {})
     setEditing(true)
@@ -97,6 +134,7 @@ export default function AccountDetail() {
         address: editData.address || null,
         jira_ticket_id: editData.jira_ticket_id || null,
         notes: editData.notes || null,
+        account_manager_id: editData.account_manager_id ? Number(editData.account_manager_id) : null,
         custom_fields: Object.keys(customFieldValues).length > 0 ? customFieldValues : null,
       })
       toast.success('Account updated')
@@ -110,6 +148,86 @@ export default function AccountDetail() {
   }
 
   const set = (k, v) => setEditData(d => ({ ...d, [k]: v }))
+
+  const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || '—'
+
+  const handleAddTask = async () => {
+    if (!newTask.title) return
+    setSavingTask(true)
+    try {
+      await tasksApi.create({
+        ...newTask,
+        due_date: newTask.due_date || undefined,
+        related_to_type: 'account',
+        related_to_id: Number(id),
+      })
+      setNewTask({ title: '', due_date: '', priority: 'medium' })
+      setShowTaskForm(false)
+      loadTasks()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error creating task')
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  const handleCompleteTask = async (taskId) => {
+    await tasksApi.update(taskId, { status: 'completed' })
+    loadTasks()
+  }
+
+  const handleCreateDeal = async () => {
+    if (!newDeal.title) return
+    setSavingDeal(true)
+    try {
+      const currencyRate = currencies.currencies[newDeal.currency]?.rate ?? 1
+      const def = workflows.find(w => w.is_default) ?? workflows[0]
+      const deal = await dealsApi.create({
+        title: newDeal.title,
+        account_id: Number(id),
+        type: newDeal.type,
+        workflow_id: newDeal.workflow_id ? Number(newDeal.workflow_id) : (def?.id ?? undefined),
+        currency: newDeal.currency,
+        exchange_rate_eur: currencyRate,
+        value_eur: newDeal.value_eur ? Number(newDeal.value_eur) : null,
+        probability: newDeal.probability ? Number(newDeal.probability) : 0,
+        product_type: newDeal.product_type || undefined,
+        quantity: newDeal.quantity ? Number(newDeal.quantity) : null,
+        expected_close_date: newDeal.expected_close_date || undefined,
+      })
+      toast.success('Deal created')
+      setShowDealForm(false)
+      setNewDeal({ title: '', value_eur: '', type: 'standard', workflow_id: def ? String(def.id) : '', currency: 'EUR', probability: '0', product_type: '', quantity: '', expected_close_date: '' })
+      navigate(`/deals/${deal.id}`)
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error creating deal')
+    } finally {
+      setSavingDeal(false)
+    }
+  }
+
+  const handleCreateContact = async () => {
+    if (!newContact.first_name || !newContact.last_name) return
+    setSavingContact(true)
+    try {
+      await contactsApi.create({
+        account_id: Number(id),
+        first_name: newContact.first_name,
+        last_name: newContact.last_name,
+        email: newContact.email || undefined,
+        phone: newContact.phone || undefined,
+        is_primary: newContact.is_primary,
+      })
+      toast.success('Contact created')
+      setShowContactForm(false)
+      setNewContact({ first_name: '', last_name: '', email: '', phone: '', is_primary: false })
+      load()
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error creating contact')
+    } finally {
+      setSavingContact(false)
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -217,9 +335,15 @@ export default function AccountDetail() {
 
           {/* Deals */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
-              Deals ({deals.length})
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                Deals ({deals.length})
+              </h2>
+              <button onClick={() => setShowDealForm(true)}
+                className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline">
+                <PlusIcon className="w-3.5 h-3.5" /> {t('accounts.addDeal')}
+              </button>
+            </div>
             {deals.length === 0
               ? <p className="text-sm text-gray-400">No deals yet.</p>
               : (
@@ -250,9 +374,15 @@ export default function AccountDetail() {
 
           {/* Contacts */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">
-              {t('accounts.contacts')} ({contacts.length})
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                {t('accounts.contacts')} ({contacts.length})
+              </h2>
+              <button onClick={() => setShowContactForm(true)}
+                className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline">
+                <PlusIcon className="w-3.5 h-3.5" /> {t('accounts.addContact')}
+              </button>
+            </div>
             {contacts.length === 0
               ? <p className="text-sm text-gray-400">No contacts yet.</p>
               : (
@@ -279,6 +409,41 @@ export default function AccountDetail() {
                 </div>
               )
             }
+          </div>
+
+          {/* Tasks */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                {t('tasks.title')} ({tasks.filter(t => t.status === 'open').length})
+              </h2>
+              <button onClick={() => setShowTaskForm(f => !f)}
+                className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium">
+                <PlusIcon className="w-3.5 h-3.5" /> {t('tasks.new')}
+              </button>
+            </div>
+            {showTaskForm && (
+              <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2">
+                <input className="input-field w-full text-sm" placeholder={t('common.name') + ' *'}
+                  value={newTask.title} onChange={e => setNewTask(d => ({ ...d, title: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" className="input-field w-full text-sm" value={newTask.due_date}
+                    onChange={e => setNewTask(d => ({ ...d, due_date: e.target.value }))} />
+                  <select className="input-field w-full text-sm" value={newTask.priority}
+                    onChange={e => setNewTask(d => ({ ...d, priority: e.target.value }))}>
+                    <option value="low">{t('tasks.priorities.low')}</option>
+                    <option value="medium">{t('tasks.priorities.medium')}</option>
+                    <option value="high">{t('tasks.priorities.high')}</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleAddTask} disabled={savingTask || !newTask.title}
+                    className="btn-primary text-xs px-3 py-1.5 disabled:opacity-50">{t('common.save')}</button>
+                  <button onClick={() => setShowTaskForm(false)} className="btn-secondary text-xs px-3 py-1.5">{t('common.cancel')}</button>
+                </div>
+              </div>
+            )}
+            <TaskList tasks={tasks} onUpdate={loadTasks} onEdit={setEditingTask} />
           </div>
 
           {/* Activity feed / Change History */}
@@ -326,6 +491,12 @@ export default function AccountDetail() {
                 {t(`accounts.statuses.${account.status}`)}
               </span>
             </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t('accounts.owner')}</p>
+              <span className="text-gray-700 dark:text-gray-300">
+                {account.account_manager_id ? getUserName(account.account_manager_id) : '—'}
+              </span>
+            </div>
             {account.region && (
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">Region</p>
@@ -364,6 +535,158 @@ export default function AccountDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* New Deal Modal */}
+      {showDealForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('accounts.addDeal')}</h2>
+              <button onClick={() => setShowDealForm(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Title *</label>
+                <input className="input-field w-full" value={newDeal.title}
+                  onChange={e => setNewDeal(d => ({ ...d, title: e.target.value }))} />
+              </div>
+              {workflows.length > 1 && (
+                <div>
+                  <label className="label">Workflow</label>
+                  <select className="input-field w-full" value={newDeal.workflow_id}
+                    onChange={e => setNewDeal(d => ({ ...d, workflow_id: e.target.value }))}>
+                    {workflows.map(wf => (
+                      <option key={wf.id} value={wf.id}>{wf.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Type</label>
+                  <select className="input-field w-full" value={newDeal.type}
+                    onChange={e => setNewDeal(d => ({ ...d, type: e.target.value }))}>
+                    <option value="standard">Standard</option>
+                    <option value="barter">Barter</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Product Type</label>
+                  <input className="input-field w-full" placeholder="T-Shirts, Hoodies…"
+                    value={newDeal.product_type}
+                    onChange={e => setNewDeal(d => ({ ...d, product_type: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Currency</label>
+                  <select className="input-field w-full" value={newDeal.currency}
+                    onChange={e => setNewDeal(d => ({ ...d, currency: e.target.value }))}>
+                    {Object.entries(currencies.currencies).map(([code, c]) => (
+                      <option key={code} value={code}>{code} ({c.symbol})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">{t('deals.value')}</label>
+                  <input type="number" step="0.01" className="input-field w-full" placeholder="0.00"
+                    value={newDeal.value_eur}
+                    onChange={e => setNewDeal(d => ({ ...d, value_eur: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Probability (%)</label>
+                  <input type="number" min="0" max="100" className="input-field w-full"
+                    value={newDeal.probability}
+                    onChange={e => setNewDeal(d => ({ ...d, probability: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Quantity</label>
+                  <input type="number" className="input-field w-full"
+                    value={newDeal.quantity}
+                    onChange={e => setNewDeal(d => ({ ...d, quantity: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Expected Close Date</label>
+                  <input type="date" className="input-field w-full"
+                    value={newDeal.expected_close_date}
+                    onChange={e => setNewDeal(d => ({ ...d, expected_close_date: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleCreateDeal} disabled={savingDeal || !newDeal.title}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
+                <CheckIcon className="w-4 h-4" /> {savingDeal ? '…' : t('common.save')}
+              </button>
+              <button onClick={() => setShowDealForm(false)} className="btn-secondary">{t('common.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Contact Modal */}
+      {showContactForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('accounts.addContact')}</h2>
+              <button onClick={() => setShowContactForm(false)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">{t('contacts.firstName')} *</label>
+                  <input className="input-field w-full" value={newContact.first_name}
+                    onChange={e => setNewContact(c => ({ ...c, first_name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">{t('contacts.lastName')} *</label>
+                  <input className="input-field w-full" value={newContact.last_name}
+                    onChange={e => setNewContact(c => ({ ...c, last_name: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">{t('common.email')}</label>
+                <input type="email" className="input-field w-full" value={newContact.email}
+                  onChange={e => setNewContact(c => ({ ...c, email: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">{t('common.phone')}</label>
+                <input className="input-field w-full" value={newContact.phone}
+                  onChange={e => setNewContact(c => ({ ...c, phone: e.target.value }))} />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input type="checkbox" checked={newContact.is_primary}
+                  onChange={e => setNewContact(c => ({ ...c, is_primary: e.target.checked }))}
+                  className="rounded border-gray-300 dark:border-gray-600" />
+                {t('contacts.isPrimary')}
+              </label>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleCreateContact} disabled={savingContact || !newContact.first_name || !newContact.last_name}
+                className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
+                <CheckIcon className="w-4 h-4" /> {savingContact ? '…' : t('common.save')}
+              </button>
+              <button onClick={() => setShowContactForm(false)} className="btn-secondary">{t('common.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingTask && (
+        <TaskEditModal
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+          onSaved={() => { setEditingTask(null); loadTasks() }}
+        />
       )}
 
       {/* Edit Modal */}
@@ -429,6 +752,13 @@ export default function AccountDetail() {
               <div>
                 <label className="label">Notes</label>
                 <textarea rows={3} className="input-field w-full" value={editData.notes} onChange={e => set('notes', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">{t('accounts.owner')}</label>
+                <select className="input-field w-full" value={editData.account_manager_id ?? ''} onChange={e => set('account_manager_id', e.target.value)}>
+                  <option value="">— None —</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
               </div>
               {customFieldDefs.length > 0 && (
                 <div className="pt-1 border-t border-gray-100 dark:border-gray-700">

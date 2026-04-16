@@ -48,3 +48,9 @@ class Task(Base):
 
     # Relationships
     assigned_user: Mapped["User | None"] = relationship("User", back_populates="tasks")  # type: ignore[name-defined]
+
+    @property
+    def assigned_user_name(self) -> str | None:
+        if self.assigned_user is None:
+            return None
+        return self.assigned_user.full_name

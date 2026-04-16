@@ -2,7 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { accountsApi } from '../api/accounts'
+import { usersApi } from '../api/users'
 import { settingsApi } from '../api/settings'
+import { useAuth } from '../contexts/AuthContext'
 import { PlusIcon, MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
@@ -30,17 +32,23 @@ const PAGE_SIZE = 50
 export default function Accounts() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
+
   const [accounts, setAccounts] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(false)
+  const [users, setUsers] = useState([])
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
-  const [quickFilter, setQuickFilter] = useState('30d')
-  const [dateFrom, setDateFrom] = useState(() => getQuickFilterDate('30d'))
+  // Non-admins default to their own accounts; admins see all
+  const [ownerFilter, setOwnerFilter] = useState(() => (currentUser?.role !== 'admin' ? String(currentUser?.id ?? '') : ''))
+  const [quickFilter, setQuickFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
   const { register, handleSubmit, reset } = useForm()
@@ -49,7 +57,10 @@ export default function Accounts() {
 
   useEffect(() => {
     settingsApi.listCustomFields('account').then(setCustomFieldDefs).catch(() => {})
+    usersApi.list().then(setUsers).catch(() => {})
   }, [])
+
+  const getUserName = (id) => users.find(u => u.id === id)?.full_name || '—'
 
   const fetch = useCallback((p, dateOverride = null) => {
     setLoading(true)
@@ -57,6 +68,7 @@ export default function Accounts() {
     if (search) params.search = search
     if (statusFilter) params.status = statusFilter
     if (typeFilter) params.type = typeFilter
+    if (ownerFilter) params.owner = ownerFilter
     const from = dateOverride ? dateOverride.from : dateFrom
     const to   = dateOverride ? dateOverride.to   : dateTo
     if (from) params.created_after = from
@@ -64,14 +76,15 @@ export default function Accounts() {
     accountsApi.list(params)
       .then(data => { setAccounts(data); setHasMore(data.length === PAGE_SIZE) })
       .finally(() => setLoading(false))
-  }, [search, statusFilter, typeFilter, dateFrom, dateTo])
+  }, [search, statusFilter, typeFilter, ownerFilter, dateFrom, dateTo])
 
   useEffect(() => { fetch(page) }, [page])  // eslint-disable-line
 
   const applyFilters = () => { setPage(1); fetch(1) }
-  const hasFilter = quickFilter || search || statusFilter || typeFilter || dateFrom || dateTo
+  const hasFilter = quickFilter || search || statusFilter || typeFilter || ownerFilter || dateFrom || dateTo
   const clearFilters = () => {
     setSearch(''); setStatusFilter(''); setTypeFilter('')
+    setOwnerFilter(isAdmin ? '' : String(currentUser?.id ?? ''))
     setQuickFilter(''); setDateFrom(''); setDateTo('')
     setPage(1); fetch(1, { from: '', to: '' })
   }
@@ -88,12 +101,13 @@ export default function Accounts() {
     if (filters.search !== undefined) setSearch(filters.search || '')
     if (filters.status !== undefined) setStatusFilter(filters.status || '')
     if (filters.type !== undefined) setTypeFilter(filters.type || '')
+    if (filters.owner !== undefined) setOwnerFilter(filters.owner || '')
     if (filters.dateFrom !== undefined) setDateFrom(filters.dateFrom || '')
     if (filters.dateTo !== undefined) setDateTo(filters.dateTo || '')
     setPage(1); fetch(1)
   }
 
-  const currentFilters = { search, status: statusFilter, type: typeFilter, dateFrom, dateTo }
+  const currentFilters = { search, status: statusFilter, type: typeFilter, owner: ownerFilter, dateFrom, dateTo }
 
   const onSubmit = async (data) => {
     try {
@@ -131,6 +145,17 @@ export default function Accounts() {
           <option value="b2b">B2B</option>
           <option value="b2b2c">B2B2C</option>
         </select>
+        {isAdmin ? (
+          <select className="input-field text-sm py-1.5 w-40" value={ownerFilter} onChange={e => { setOwnerFilter(e.target.value); setPage(1) }}>
+            <option value="">{t('accounts.allOwners')}</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+        ) : (
+          <select className="input-field text-sm py-1.5 w-40" value={ownerFilter} onChange={e => { setOwnerFilter(e.target.value); setPage(1) }}>
+            <option value={currentUser?.id}>{t('accounts.myAccounts')}</option>
+            <option value="">{t('accounts.allOwners')}</option>
+          </select>
+        )}
         <QuickDateFilter value={quickFilter} onChange={applyQuickFilter} />
         <input type="date" className="input-field text-sm py-1.5 w-36" value={dateFrom}
           onChange={e => { setDateFrom(e.target.value); setQuickFilter('') }} title="Created from" />
@@ -169,6 +194,11 @@ export default function Accounts() {
               <input className="input-field w-full" {...register('country')} /></div>
             <div><label className="label">{t('accounts.region')}</label>
               <input className="input-field w-full" {...register('region')} /></div>
+            <div><label className="label">{t('accounts.owner')}</label>
+              <select className="input-field w-full" {...register('account_manager_id', { setValueAs: v => v ? Number(v) : undefined })}>
+                <option value="">— None —</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select></div>
             <div><label className="label">{t('accounts.website')}</label>
               <input className="input-field w-full" {...register('website')} /></div>
             <div className="sm:col-span-2"><label className="label">{t('accounts.address')}</label>
@@ -217,7 +247,7 @@ export default function Accounts() {
                   ref={el => { if (el) el.indeterminate = bulk.someSelected }}
                   onChange={bulk.toggleAll} className="rounded border-gray-300 dark:border-gray-600" />
               </th>
-              {['common.name','common.type','accounts.industry','accounts.country','common.status'].map(k => (
+              {['common.name','common.type','accounts.industry','accounts.country','accounts.owner','common.status'].map(k => (
                 <th key={k} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   {t(k)}
                 </th>
@@ -226,9 +256,9 @@ export default function Accounts() {
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {loading
-              ? <tr><td colSpan={6} className="text-center py-8 text-gray-400">{t('common.loading')}</td></tr>
+              ? <tr><td colSpan={7} className="text-center py-8 text-gray-400">{t('common.loading')}</td></tr>
               : accounts.length === 0
-              ? <tr><td colSpan={6} className="text-center py-10 text-gray-400">No accounts found.</td></tr>
+              ? <tr><td colSpan={7} className="text-center py-10 text-gray-400">No accounts found.</td></tr>
               : accounts.map(account => (
                 <tr key={account.id}
                   className={clsx('hover:bg-gray-50 dark:hover:bg-gray-700/30', bulk.isSelected(account.id) && 'bg-brand-50/50 dark:bg-brand-900/10')}>
@@ -244,6 +274,9 @@ export default function Accounts() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.industry || '—'}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{account.country || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                    {account.account_manager_id ? getUserName(account.account_manager_id) : '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium', STATUS_COLORS[account.status])}>
                       {t(`accounts.statuses.${account.status}`)}

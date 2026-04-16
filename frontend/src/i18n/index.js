@@ -16,7 +16,7 @@ i18n
     fallbackLng: 'en',
     supportedLngs: ['en', 'de'],
     detection: {
-      order: ['localStorage', 'navigator'],
+      order: ['localStorage'],
       caches: ['localStorage'],
       lookupLocalStorage: 'crm_language',
     },

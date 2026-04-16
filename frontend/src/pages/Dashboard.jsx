@@ -8,6 +8,7 @@ import { activitiesApi } from '../api/activities'
 import { settingsApi } from '../api/settings'
 import Pipeline from '../components/Pipeline'
 import TaskList from '../components/TaskList'
+import TaskEditModal from '../components/TaskEditModal'
 import ActivityFeed from '../components/ActivityFeed'
 import { BriefcaseIcon, UserGroupIcon, CurrencyEuroIcon, TrophyIcon } from '@heroicons/react/24/outline'
 
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [deals, setDeals] = useState([])
   const [leads, setLeads] = useState([])
   const [tasks, setTasks] = useState([])
+  const [editingTask, setEditingTask] = useState(null)
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [currencyConfig, setCurrencyConfig] = useState({ base_currency: 'EUR', currencies: { EUR: { symbol: '€' } } })
@@ -148,7 +150,17 @@ export default function Dashboard() {
               </span>
             )}
           </div>
-          <TaskList tasks={tasks.slice(0, 8)} />
+          <TaskList tasks={tasks.slice(0, 8)} onEdit={setEditingTask} />
+          {editingTask && (
+            <TaskEditModal
+              task={editingTask}
+              onClose={() => setEditingTask(null)}
+              onSaved={() => {
+                setEditingTask(null)
+                tasksApi.list({ status: 'open', limit: 20 }).then(setTasks).catch(() => {})
+              }}
+            />
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">

@@ -15,8 +15,9 @@ from app.models.deal import Deal, DealStage
 from app.models.account import Account, AccountType, AccountStatus
 from app.models.contact import Contact
 from app.models.user import User
-from app.schemas.lead import LeadCreate, LeadUpdate, LeadOut, LeadConvert
+from app.schemas.lead import LeadCreate, LeadUpdate, LeadOut, LeadConvert, LeadConvertToAccount
 from app.schemas.deal import DealOut
+from app.schemas.account import AccountOut
 from app.services.auth_service import get_current_user
 from app.routers.notifications import create_notification
 from app.routers.audit_log import log_event, AuditAction
@@ -30,6 +31,7 @@ async def list_leads(
     assigned_to: Optional[int] = None,
     source: Optional[str] = None,
     search: Optional[str] = None,
+    exclude_converted: bool = True,
     created_after: Optional[datetime] = None,
     created_before: Optional[datetime] = None,
     skip: int = 0,
@@ -40,6 +42,9 @@ async def list_leads(
     q = select(Lead)
     if status:
         q = q.where(Lead.status == status)
+        # when an explicit status is requested, don't also exclude converted
+    elif exclude_converted:
+        q = q.where(Lead.status != LeadStatus.converted)
     if assigned_to:
         q = q.where(Lead.assigned_to == assigned_to)
     if source:
@@ -162,6 +167,34 @@ async def convert_lead(
     lead.status = LeadStatus.converted
     await db.flush()
     return deal
+
+
+@router.post("/{lead_id}/convert-to-account", response_model=AccountOut)
+async def convert_lead_to_account(
+    lead_id: int,
+    payload: LeadConvertToAccount,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(select(Lead).where(Lead.id == lead_id))
+    lead = result.scalar_one_or_none()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead.status == LeadStatus.converted:
+        raise HTTPException(status_code=400, detail="Lead already converted")
+
+    account = Account(
+        name=payload.account_name or lead.company_name or "Unnamed Account",
+        type=AccountType(payload.account_type),
+        status=AccountStatus.prospect,
+        account_manager_id=payload.assigned_to or current_user.id,
+    )
+    db.add(account)
+    lead.status = LeadStatus.converted
+    await db.flush()
+    await log_event(db, entity_type="lead", entity_id=lead.id, action=AuditAction.update,
+                    user=current_user, note=f"Lead converted to Account: {account.name}")
+    return account
 
 
 class LeadBulkAction(BaseModel):

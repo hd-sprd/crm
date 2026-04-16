@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import Optional, Literal
 from datetime import datetime, timezone
 
@@ -36,7 +37,7 @@ async def list_deals(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Deal)
+    q = select(Deal).options(selectinload(Deal.account), selectinload(Deal.contact))
     if stage:
         q = q.where(Deal.stage == stage)
     if workflow_id:
@@ -84,7 +85,13 @@ async def create_deal(
                                   title=f"New deal assigned: {deal.title}",
                                   body=f"Assigned by {current_user.full_name}",
                                   entity_type="deal", entity_id=deal.id)
-    return deal
+    # Reload with relationships so account/contact are available for serialization
+    result2 = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.account), selectinload(Deal.contact))
+        .where(Deal.id == deal.id)
+    )
+    return result2.scalar_one()
 
 
 @router.get("/{deal_id}", response_model=DealOut)
@@ -93,7 +100,11 @@ async def get_deal(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Deal).where(Deal.id == deal_id))
+    result = await db.execute(
+        select(Deal)
+        .options(selectinload(Deal.account), selectinload(Deal.contact))
+        .where(Deal.id == deal_id)
+    )
     deal = result.scalar_one_or_none()
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")

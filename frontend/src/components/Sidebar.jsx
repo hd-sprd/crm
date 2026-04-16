@@ -22,13 +22,11 @@ const NAV_GROUPS = [
     items: [
       { key: 'leads',  to: '/leads',  icon: UserGroupIcon,   perm: 'view_leads' },
       { key: 'deals',  to: '/deals',  icon: BriefcaseIcon,   perm: 'view_deals' },
-      { key: 'quotes', to: '/quotes', icon: DocumentTextIcon, perm: 'view_quotes' },
     ],
   },
   {
     label: 'nav.group.crm',
     items: [
-      { key: 'contacts', to: '/contacts', icon: PhoneIcon,          perm: 'view_contacts' },
       { key: 'accounts', to: '/accounts', icon: BuildingOfficeIcon,  perm: 'view_accounts' },
     ],
   },

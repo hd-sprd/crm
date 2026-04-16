@@ -1,0 +1,128 @@
+[Leads] 88231 gelesen, 31756 konvertierte in Account-Map, 56 Status-Skip, 55268 ohne Inhalt, 390 nicht-B2B, 761 exportiert | Account-Map: 402 SF-IDs, 476 Firmen-Namen | Opp-Map: 5273 Opp-IDs, EU-PID-Map: 58, NA-PID-Map: 0
+  ✓ Lead: Zuzanna Malek / VECTOR SOLUTIONS <z.malek@vector.net> [manual]
+  ✓ Lead: Samuel Trageser / Sportjungend Rheinland-Pfalz <s.trageser@sportjugend.de> [manual]
+  ✓ Lead: Anita Sikorska / Fundacja Rodziny Staraków <asikorska@spectra.com.pl> [manual]
+  ✓ Lead: Gianluca Cerino / - <cerino.gianluca@protonmail.com> [manual]
+  ✓ Lead: Gina-Maria Mojr / Junge Union Bayern <gina.mojr@ju-bayern.de> [manual]
+  ✓ Lead: Tanja Petrell / Tanja Petrell (commercial name: PetrelliArt) <tanja@petrelliart.com> [manual]
+  ✓ Lead: Pippa Scott / Jazwares <pscott@jazwares.com> [manual]
+  ✓ Lead: Brendan Bouffler / Amazon Web Services <bouffler@amazon.com> [manual]
+  ✓ Lead: Julia Zill / BAUHAUS <julia.zill@bahag.com> [manual]
+  ✓ Lead: Marietheres Rebele / Schule <m.rebele@gmx.de> [manual]
+  ✓ Lead: Susanne Lang / AXA Konzern AG <susanne.lang@axa.de> [manual]
+  ✓ Lead: Steven Mohlau / TWINK Fashion Inh. Steven Mohlau <steven@twink.vip> [manual]
+  ✓ Lead: Patrycja Ozimina / VARIUS SPÓ?KA CYWILNA- PATRYCJA SWAD?BA, AGNIESZKA <patrycja.ozimina@varius.net.pl> [manual]
+  ✓ Lead: Karl Schuster / Skischule Mittelberg-Tobel GmbH (Bödmen Grund) <info@skischule-mittelberg.at> [manual]
+  ✓ Lead: Russ Hosmer / Adams County Fire Protection District <rhosmer@acfpd.org> [manual]
+  ✓ Lead: Robert Garrison / Aumsville Rural Fire Protection District <rgarrison@aumsvillefire.org> [manual]
+  ✓ Lead: Charles Verm / Austin County Emergency Services District No. 2 <charles.verm@sealyfire.com> [manual]
+  ✓ Lead: James Caldwell / Advance Volunteer Fire Department Inc. <james.caldwell@advancefire.ning.com> [manual]
+  ✓ Lead: Jim Mcneal / Andersonville Volunteer Fire <jim@interwurx.com> [manual]
+  ✓ Lead: Kyle Buckner / Alamance County Rescue Squad Inc <kyle.buckner@alamance-nc.com> [manual]
+  ✓ Lead: John Nixon / Antioch Village Fire Dept Station 2 <jnixon@antiochfire.org> [manual]
+  ✓ Lead: jason ramey / Bargersville Community Fire Protection District <jaramey@bcfd.net> [manual]
+  ✓ Lead: william Bechstein / Berlin Twp. Fire Department <firechief@berlintwp.us> [manual]
+  ✓ Lead: Ron Elchert / Apex Parks Group, LLC <ron@apexparksgroup.com> [manual]
+  ✓ Lead: david taylor / Avoca Volunteer Fire Department <dtaylor@avocavfd.org> [manual]
+  ✓ Lead: Dennis Allen / Beachwood Volunteer Fire Company No 1 <dallen@bvfd16.com> [manual]
+  ✓ Lead: shawn Carmody / Bedford Village Fire District <scarmody@bedfordfire.com> [manual]
+  ✓ Lead: Scottie Chilton / Bannertown Volunteer Fire Department, Inc. <chief@bannertownvfd.com> [manual]
+  ✓ Lead: dave Dowdle / Bath Volunteer Fire Department <ddowdle@bathfire.org> [manual]
+  ✓ Lead: Joshua Schiebrel / Bethel Township Fire Department Inc <josh.schiebrel@betheltownship.org> [manual]
+  ✓ Lead: Dan Oberst / Bath Twp Fire Dept <doberst@bathtownship.us> [manual]
+  ✓ Lead: Chavely Tamayo / A.L.M. Sports, LLC <chavely@almsports.com> [manual]
+  ✓ Lead: Matt Speach / Belgium Cold Springs Fire Department <mspeach@bcsfd.org> [manual]
+  ✓ Lead: Stacie White / AllStar Wichita <swhite@allstarwichita.com> [manual]
+  ✓ Lead: John Holloway / Berlin Fire Company, Inc. <jholloway@berlinfire.com> [manual]
+  ✓ Lead: Mark Larkey / Arcade City <mark@arcade.city> [manual]
+  ✓ Lead: Brittany Williams / Andretti Thrill Park <bwilliams@andrettithrillpark.com> [manual]
+  ✓ Lead: Ann-Kathrin Müller / Rheinkraft International GmbH <ann-kathrin.mueller@rki-logistics.com> [manual]
+  ✓ Lead: Melanie Schmidt / Verein Jugend am Werk <melanie.schmidt@jaw.at> [manual]
+  ✓ Lead: Daphne Lord / Berry Knott's Farm LLC <daphne.lord@ihg.com> [manual]
+  ✓ Lead: Sam Brezarich / Berry Knott's Farm LLC <sam.brezarich@knotts.com> [manual]
+  ✓ Lead: Don Prescott / Berry Knott's Farm LLC <dprescott@knotts.com> [manual]
+  ✓ Lead: Seth Gammache / Arnolds Family Fun Center <seth@arnoldsffc.com> [manual]
+  ✓ Lead: Susan Catanoso / Atlantic Pier Amusements, Inc <sue@steelpier.com> [manual]
+  ✓ Lead: Lynn Webb / Cedar Point Park LLC <lynn.webb@cedarpoint.com> [manual]
+  ✓ Lead: Caroline Zielinski / Yu Kids Island, LLC <caroline@yukidschicago.com> [manual]
+  ✓ Lead: Frank Asbell / Yellow Stone Bear World <frank@yellowstonebearworld.com> [manual]
+  ✓ Lead: Rebecca Lindsey / Yanaco, Inc. <rebecca@waterworkspark.com> [manual]
+  ✓ Lead: Nik Mikros / Bumblebear Games LLC <nik@bumblebeargames.com> [manual]
+  ✓ Lead: John Webster / Carolina Adventure World, LLC <jwebster@carolinaadventureworld.net> [manual]
+  ✓ Lead: Doug Likkel / C & B Music & Vending, Inc. <doug@candbmusic.com> [manual]
+  ✓ Lead: Claudia Wilson / Worlds of Fun LLC <claudia.wilson@worldsoffun.com> [manual]
+  ✓ Lead: Rick Stammel / Wonderland Amusement Management LLC <rstammel@dutchwonderland.com> [manual]
+  ✓ Lead: Dan Whiting / Whitings Games <dan@whitingsfoods.com> [manual]
+  ✓ Lead: Daniel Andrade / Wild Island, Inc. <dandrade@wildisland.com> [manual]
+  ✓ Lead: Justin Hays / Cliff's Amusement Park Inc <justin@cliffs.net> [manual]
+  ✓ Lead: Robin Gaedke / Cody Go Karts, Inc. <jeff@codygokarts.com> [manual]
+  ✓ Lead: Chris Snyder / Kennywood Refreshment CO <cmsnyder@kennywood.com> [manual]
+  ✓ Lead: Kamila Schmidt / COGITANDA Dataprotect AG <> [manual]
+  ✓ Lead: Michelle Doughty / Waterville Usa, Inc. <michelled@watervilleusa.com> [manual]
+  ✓ Lead: Sharon Hays / Walt Disney Parks and Resorts U.S., Inc. <sharon.hays@disney.com> [manual]
+  ✓ Lead: Matthew Dickson / Walt Disney Parks and Resorts U.S., Inc. <john.dickson@disney.com> [manual]
+  ✓ Lead: Esther Carter / Walt Disney Parks and Resorts U.S., Inc. <esther.carter@disney.com> [manual]
+  ✓ Lead: Brendan Smythe / Vr1 Arcade <brendan@vr1arcade.com> [manual]
+  ✓ Lead: Maud Devouassoux / SAS Buvette du plan de l'Aiguille <bar.du.plan@gmail.com> [manual]
+  ✓ Lead: Adrianna Witos / ALPLA <adrianna.witos@alpla.com> [manual]
+  ✓ Lead: Agnieszka Biernacka / AmRest <agnieszka.biernacka@amrest.eu> [manual]
+  ✓ Lead: Kathrin Drechsler / - <mail@kathrindrechsler.de> [manual]
+  ✓ Lead: Lee Whatcott / Uptown Jungle Fun Park <lee@uptownjungle.com> [manual]
+  ✓ Lead: Teresa Vlasic / Universal City Development Partners, Ltd. <teresa.vlasic@universalorlando.com> [manual]
+  ✓ Lead: Ariella Roberts / Twdc Enterprises 18 Corp. <ariella.roberts@disney.com> [manual]
+  ✓ Lead: Lou Repassy / Universal City Development Partners, Ltd. <lou.repassy@universalorlando.com> [manual]
+  ✓ Lead: Lora Sauls / Universal City Development Partners, Ltd. <lora.sauls@universalorlando.com> [manual]
+  ✓ Lead: Matthew Girocco / Typhoon Waterpark of Texas, LLC <matthew.girocco@typhoontexas.com> [manual]
+  ✓ Lead: Michael Murphy / Triple Play <mmurphy@3play.com> [manual]
+  ✓ Lead: Peter Hannen / Tim Hannen <peter@ovrp.net> [manual]
+  ✓ Lead: Scott Loos / The Waters of Kapolei L L C <sloos@wetnwildhawaii.com> [manual]
+  ✓ Lead: liza giani / Tillotson <liza.giani@tillotson.ie> [manual]
+  ✓ Lead: Ebel Jim / The Practice Center Inc <jebel@tpcgolf.com> [manual]
+  ✓ Lead: Tyler Vaslev / Enchanted Forest, Inc. <tyler@enchantedforest.com> [manual]
+  ✓ Lead: Kim Yates / Haunted Attraction Owner / Operator <kim.yates@kimskrypt.com> [manual]
+  ✓ Lead: Stephen Haynes / The Funplex <stephen@thefunplex.com> [manual]
+  ✓ Lead: Patti Moore / The Bajas Inc <patti@bajaoc.com> [manual]
+  ✓ Lead: Connie Levotte / Storybook Island, Inc. <connie@storybookisland.com> [manual]
+  ✓ Lead: Bryan Clark / Spartan Adventure Park, LLC <bryan@spartanadventurepark.com> [manual]
+  ✓ Lead: Stephen Carlson / Coin Castle Amusements <steve@coincastle.com> [manual]
+  ✓ Lead: Joey Coulter / Coulter Motorsports <joey@joeycoulter.com> [manual]
+  ✓ Lead: Erin Kauffman / Durham Central Park <erin.kauffman@durhamcentralpark.org> [manual]
+  ✓ Lead: Jonathan Fehnel / Dorney Park LLC <jfehnel@dorneypark.com> [manual]
+  ✓ Lead: Susan Martin / Eastland Enterprises, Inc. <susan@winners-choice.com> [manual]
+  ✓ Lead: Paula Shaw / Family Kingdom, Inc. <payables@family-kingdom.com> [manual]
+  ✓ Lead: Darren Harmon / Family Fun Center <harmond@fun-center.com> [manual]
+  ✓ Lead: Jason Deffley / Family Fun Centers, Tukwila LLC <skippy@fun-center.com> [manual]
+  ✓ Lead: Bob Switalski / Fun 'n Stuff Amusements, Inc. <bob@fun-n-stuff.com> [manual]
+  ✓ Lead: Mark Skoglund / Fun-Tastic Shows Inc <mark.skoglund@funtasticshows.com> [manual]
+  ✓ Lead: Michael Schwitek / General Attractions, LLC <michael.schwitek@alabamaadventure.com> [manual]
+  ✓ Lead: Danielle Short Cfbe / Hershey Entertainment & Resorts Company <dlshort@hersheypa.com> [manual]
+  ✓ Lead: Derek Pettus / Hillbilly Hollar Corporation <derek.pettus@lokomotion.com> [manual]
+  ✓ Lead: Sarah Worrell / Kentucky Kingdom Lllp <sworrell@kentuckykingdom.com> [manual]
+  ✓ Lead: Jessica Jensen / Legoland California, LLC <jessica.jensen@legoland.com> [manual]
+  ... (weitere 661 Leads nicht einzeln gelistet)
+[Accounts] 875 Accounts total exportiert
+  Aus Account.csv: 2 Accounts
+  Aus konvertierten Leads: 402 neue Accounts
+  Aus B2B-Leads (Firma-Feld): 471 neue Accounts
+[Contacts] übersprungen
+[Deals] 195 exportiert (193 Revenue + 2 Opps)
+  Revenue-Deals: 927 gesamt, 193 in den letzten 3 Jahren, 16 mit Firmenname, 177 mit Placeholder-Account
+  ✓ Opp: bianca de paula A Artistry Flow → bianca de paula A Artistry Flow [Qualified→lead_qualification]
+  ✓ Opp: Elliot Schiro the_dandlion_§hop → Elliot Schiro the_dandlion_§hop [Qualified→lead_qualification]
+  Opportunity.csv: 4 gelesen, 0 übersprungen, 2 ohne Account-Match
+  [Accounts+] 164 Partner-Placeholder + 16 gematchte Firmennamen hinzugefügt
+
+=================================================================
+  ZUSAMMENFASSUNG
+=================================================================
+  Accounts :    1,055
+  Contacts :        0
+  Leads    :      761
+  Deals    :      195
+
+  Import-Reihenfolge im CRM:
+  1. accounts_import.csv  →  object_type=accounts
+  2. contacts_import.csv  →  object_type=contacts
+  3. leads_import.csv     →  object_type=leads
+  4. deals_import.csv     →  object_type=deals
+=================================================================

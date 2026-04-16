@@ -21,6 +21,8 @@ class TaskUpdate(BaseModel):
     due_date: Optional[date] = None
     priority: Optional[TaskPriority] = None
     status: Optional[TaskStatus] = None
+    related_to_type: Optional[RelatedToType] = None
+    related_to_id: Optional[int] = None
 
 
 class TaskOut(BaseModel):
@@ -30,6 +32,7 @@ class TaskOut(BaseModel):
     related_to_type: Optional[RelatedToType]
     related_to_id: Optional[int]
     assigned_to: Optional[int]
+    assigned_user_name: Optional[str] = None
     due_date: Optional[date]
     priority: TaskPriority
     status: TaskStatus
