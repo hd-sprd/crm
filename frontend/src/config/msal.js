@@ -3,12 +3,14 @@ import { PublicClientApplication } from '@azure/msal-browser'
 const clientId = import.meta.env.VITE_AZURE_CLIENT_ID
 const tenantId = import.meta.env.VITE_AZURE_TENANT_ID
 
+const redirectUri = import.meta.env.VITE_REDIRECT_URI || window.location.origin
+
 export const msalConfig = {
   auth: {
     clientId,
     authority: `https://login.microsoftonline.com/${tenantId}`,
-    redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
+    redirectUri,
+    postLogoutRedirectUri: redirectUri,
   },
   cache: {
     cacheLocation: 'sessionStorage',

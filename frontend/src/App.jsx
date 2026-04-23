@@ -23,7 +23,15 @@ import QuotePortal from './pages/QuotePortal'
 import './i18n'
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <svg className="animate-spin w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+      </svg>
+    </div>
+  )
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
@@ -38,7 +46,7 @@ function PermRoute({ perm, children }) {
 }
 
 function AppRoutes() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
 
   return (
     <Routes>
@@ -47,7 +55,7 @@ function AppRoutes() {
 
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <Login />}
+        element={loading ? null : isAuthenticated ? <Navigate to="/" replace /> : <Login />}
       />
       <Route
         path="/"
