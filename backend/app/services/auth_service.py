@@ -39,7 +39,7 @@ async def get_current_user(
     if crm_role is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No CRM role assigned. Ask your administrator to assign a role in Azure.",
+            detail=f"No CRM role assigned. Token roles: {roles_claim}. Expected one of: {[settings.AZURE_ROLE_ADMIN, settings.AZURE_ROLE_SALES_MANAGER, settings.AZURE_ROLE_ACCOUNT_MANAGER, settings.AZURE_ROLE_SALES_REP]}",
         )
 
     result = await db.execute(select(User).where(User.entra_object_id == oid))
