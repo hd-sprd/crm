@@ -1,8 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { InteractionRequiredAuthError, InteractionStatus } from '@azure/msal-browser'
 import { TOKEN_REQUEST } from '../config/msal'
 import { authApi } from '../api/auth'
+import { BACKEND_URL } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -11,6 +12,7 @@ export function AuthProvider({ children }) {
   const msalAuthenticated = useIsAuthenticated()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const warmupTimer = useRef(null)
 
   useEffect(() => {
     if (inProgress !== InteractionStatus.None) return
@@ -27,9 +29,19 @@ export function AuthProvider({ children }) {
     }
   }, [msalAuthenticated, accounts, instance, inProgress])
 
-  const login = useCallback(() => {
-    instance.loginRedirect(TOKEN_REQUEST)
-  }, [instance])
+  // Keep Vercel serverless warm — only while authenticated, pauses when tab hidden
+  useEffect(() => {
+    if (!user) return
+    const ping = () => fetch(`${BACKEND_URL}/health`, { method: 'GET', mode: 'cors' }).catch(() => {})
+    const start = () => { ping(); clearInterval(warmupTimer.current); warmupTimer.current = setInterval(ping, 4 * 60 * 1000) }
+    const stop  = () => clearInterval(warmupTimer.current)
+    start()
+    const onVisibility = () => document.hidden ? stop() : start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [user])
+
+  const login = useCallback(() => instance.loginRedirect(TOKEN_REQUEST), [instance])
 
   const logout = useCallback(() => {
     setUser(null)

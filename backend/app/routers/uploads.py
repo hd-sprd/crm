@@ -7,13 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from pydantic import BaseModel
 from typing import Optional
-from jose import JWTError, jwt
-
 from app.config import settings as cfg
 from app.database import get_db
 from app.models.attachment import Attachment
 from app.models.user import User
 from app.services.auth_service import get_current_user
+from app.services.azure_token import validate_azure_token
 import app.services.storage as storage_svc
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -93,33 +92,7 @@ class AttachmentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-async def _auth_from_request(request: Request, db: AsyncSession) -> User:
-    """Accept token from Authorization header OR ?token= query param (needed for <img src>)."""
-    token = request.query_params.get("token")
-    if not token:
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, cfg.SECRET_KEY, algorithms=[cfg.ALGORITHM])
-        user_id = int(payload.get("sub"))
-    except (JWTError, TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
-
-def _verify_token(request: Request) -> None:
-    """Validate JWT signature + expiry only — no DB lookup.
-
-    Used by file-serve endpoints so they never fail due to DB issues.
-    The JWT expiry already limits how long a stolen token can be abused.
-    """
+def _extract_token(request: Request) -> str:
     token = request.query_params.get("token") or ""
     if not token:
         auth = request.headers.get("Authorization", "")
@@ -127,9 +100,32 @@ def _verify_token(request: Request) -> None:
             token = auth[7:]
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    return token
+
+
+async def _auth_from_request(request: Request, db: AsyncSession) -> User:
+    """Accept Azure AD token from Authorization header OR ?token= query param (needed for <img src>)."""
+    token = _extract_token(request)
     try:
-        jwt.decode(token, cfg.SECRET_KEY, algorithms=[cfg.ALGORITHM])
-    except (JWTError, TypeError, ValueError):
+        claims = validate_azure_token(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    oid = claims.get("oid")
+    if not oid:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.entra_object_id == oid))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+def _verify_token(request: Request) -> None:
+    """Validate Azure AD token signature + expiry only — no DB lookup."""
+    token = _extract_token(request)
+    try:
+        validate_azure_token(token)
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 

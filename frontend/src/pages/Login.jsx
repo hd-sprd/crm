@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
 import { SunIcon, MoonIcon } from '@heroicons/react/24/outline'
+import toast from 'react-hot-toast'
 
 function MicrosoftLogo() {
   return (
@@ -18,6 +20,17 @@ export default function Login() {
   const { t, i18n } = useTranslation()
   const { login } = useAuth()
   const { isDark, toggle } = useTheme()
+  const [loading, setLoading] = useState(false)
+
+  const handleLogin = async () => {
+    setLoading(true)
+    try {
+      await login()
+    } catch (e) {
+      toast.error(e?.message || 'Sign-in failed. Check Azure configuration.')
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-12">
@@ -50,11 +63,19 @@ export default function Login() {
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
           <button
-            onClick={login}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm"
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <MicrosoftLogo />
-            Sign in with Microsoft
+            {loading ? (
+              <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            ) : (
+              <MicrosoftLogo />
+            )}
+            {loading ? 'Redirecting…' : 'Sign in with Microsoft'}
           </button>
         </div>
       </div>
