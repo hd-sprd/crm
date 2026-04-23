@@ -37,10 +37,7 @@ async def get_current_user(
     roles_claim: list[str] = claims.get("roles", [])
     crm_role = extract_crm_role(roles_claim)
     if crm_role is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"No CRM role assigned. Token roles claim: {roles_claim}",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No CRM role assigned")
 
     result = await db.execute(select(User).where(User.entra_object_id == oid))
     user = result.scalar_one_or_none()
