@@ -20,6 +20,7 @@ import AccountDetail from './pages/AccountDetail'
 import ContactDetail from './pages/ContactDetail'
 import Help from './pages/Help'
 import QuotePortal from './pages/QuotePortal'
+import AuthCallback from './pages/AuthCallback'
 import './i18n'
 
 function ProtectedRoute({ children }) {
@@ -44,6 +45,7 @@ function AppRoutes() {
     <Routes>
       {/* Public — no auth required */}
       <Route path="/portal/quote/:token" element={<QuotePortal />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
 
       <Route
         path="/login"
