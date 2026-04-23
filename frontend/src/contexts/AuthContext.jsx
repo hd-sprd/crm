@@ -41,7 +41,21 @@ export function AuthProvider({ children }) {
     return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [user])
 
-  const login = useCallback(() => instance.loginRedirect(TOKEN_REQUEST), [instance])
+  const login = useCallback(async () => {
+    try {
+      await instance.loginRedirect(TOKEN_REQUEST)
+    } catch (e) {
+      if (e?.errorCode === 'interaction_in_progress') {
+        // Clear stuck lock from a previous failed redirect and retry once
+        Object.keys(sessionStorage)
+          .filter(k => k.endsWith('.interaction.status'))
+          .forEach(k => sessionStorage.removeItem(k))
+        await instance.loginRedirect(TOKEN_REQUEST)
+      } else {
+        throw e
+      }
+    }
+  }, [instance])
 
   const logout = useCallback(() => {
     setUser(null)
