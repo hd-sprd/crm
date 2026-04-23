@@ -68,7 +68,7 @@ export function AuthProvider({ children }) {
     if (!account) return null
     try {
       const resp = await instance.acquireTokenSilent({ ...TOKEN_REQUEST, account })
-      return resp.accessToken
+      return resp.idToken
     } catch (e) {
       if (e instanceof InteractionRequiredAuthError) {
         await instance.acquireTokenRedirect({ ...TOKEN_REQUEST, account })

@@ -28,8 +28,9 @@ def validate_azure_token(token: str) -> dict:
     signing_key = client.get_signing_key_from_jwt(token)
     issuer = f"https://login.microsoftonline.com/{settings.AZURE_TENANT_ID}/v2.0"
 
-    # Try api:// audience first (access token for custom API), then bare client_id
-    for audience in (f"api://{settings.AZURE_CLIENT_ID}", settings.AZURE_CLIENT_ID):
+    # ID tokens use bare client_id as audience; access tokens use api://{client_id}.
+    # Try bare client_id first (ID token path, no "Expose an API" setup needed).
+    for audience in (settings.AZURE_CLIENT_ID, f"api://{settings.AZURE_CLIENT_ID}"):
         try:
             return jwt.decode(
                 token,

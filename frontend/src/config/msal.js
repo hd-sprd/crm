@@ -17,9 +17,10 @@ export const msalConfig = {
   },
 }
 
-// Access token scope exposed by the backend API registration in Azure
+// Request standard OIDC scopes — no "Expose an API" setup needed in Azure.
+// The ID token (result.idToken) carries oid + roles claims for the backend.
 export const TOKEN_REQUEST = {
-  scopes: [`api://${clientId}/access_as_user`],
+  scopes: ['openid', 'profile', 'email'],
 }
 
 export const msalInstance = new PublicClientApplication(msalConfig)

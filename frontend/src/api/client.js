@@ -15,7 +15,7 @@ client.interceptors.request.use(async (config) => {
   if (account) {
     try {
       const resp = await msalInstance.acquireTokenSilent({ ...TOKEN_REQUEST, account })
-      config.headers.Authorization = `Bearer ${resp.accessToken}`
+      config.headers.Authorization = `Bearer ${resp.idToken}`
     } catch (e) {
       if (e instanceof InteractionRequiredAuthError) {
         // Trigger interactive login; current request will fail with 401
