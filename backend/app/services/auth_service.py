@@ -4,7 +4,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.config import settings
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.services.azure_token import validate_azure_token, extract_crm_role
@@ -40,7 +39,7 @@ async def get_current_user(
     if crm_role is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"No CRM role assigned. Token roles: {roles_claim}. Expected one of: {[settings.AZURE_ROLE_ADMIN, settings.AZURE_ROLE_SALES_MANAGER, settings.AZURE_ROLE_ACCOUNT_MANAGER, settings.AZURE_ROLE_SALES_REP]}",
+            detail=f"No CRM role assigned. Token roles claim: {roles_claim}",
         )
 
     result = await db.execute(select(User).where(User.entra_object_id == oid))
