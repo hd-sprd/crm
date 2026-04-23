@@ -1,38 +1,58 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useMsal, useIsAuthenticated } from '@azure/msal-react'
+import { InteractionRequiredAuthError, InteractionStatus } from '@azure/msal-browser'
+import { TOKEN_REQUEST } from '../config/msal'
 import { authApi } from '../api/auth'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('crm_user') || 'null')
-    } catch {
-      return null
-    }
-  })
-  const [token, setToken] = useState(() => localStorage.getItem('crm_token') || null)
+  const { instance, accounts, inProgress } = useMsal()
+  const msalAuthenticated = useIsAuthenticated()
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const login = useCallback(async (email, password) => {
-    const data = await authApi.login(email, password)
-    setToken(data.access_token)
-    setUser(data.user)
-    localStorage.setItem('crm_token', data.access_token)
-    localStorage.setItem('crm_user', JSON.stringify(data.user))
-    return data.user
-  }, [])
+  useEffect(() => {
+    if (inProgress !== InteractionStatus.None) return
+
+    if (msalAuthenticated && accounts[0]) {
+      instance.setActiveAccount(accounts[0])
+      authApi.me()
+        .then(setUser)
+        .catch(() => setUser(null))
+        .finally(() => setLoading(false))
+    } else {
+      setUser(null)
+      setLoading(false)
+    }
+  }, [msalAuthenticated, accounts, instance, inProgress])
+
+  const login = useCallback(() => {
+    instance.loginRedirect(TOKEN_REQUEST)
+  }, [instance])
 
   const logout = useCallback(() => {
-    setToken(null)
     setUser(null)
-    localStorage.removeItem('crm_token')
-    localStorage.removeItem('crm_user')
-  }, [])
+    instance.logoutRedirect()
+  }, [instance])
 
-  const isAuthenticated = Boolean(token && user)
+  // Expose acquireToken so api/client.js can call it from the interceptor
+  const acquireToken = useCallback(async () => {
+    const account = instance.getActiveAccount() || accounts[0]
+    if (!account) return null
+    try {
+      const resp = await instance.acquireTokenSilent({ ...TOKEN_REQUEST, account })
+      return resp.accessToken
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        await instance.acquireTokenRedirect({ ...TOKEN_REQUEST, account })
+      }
+      return null
+    }
+  }, [instance, accounts])
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, acquireToken, isAuthenticated: msalAuthenticated && !!user }}>
       {children}
     </AuthContext.Provider>
   )

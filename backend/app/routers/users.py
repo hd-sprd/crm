@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserUpdate, UserOut
-from app.services.auth_service import get_current_user, hash_password, require_roles
+from app.services.auth_service import get_current_user, require_roles
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -31,7 +31,6 @@ async def create_user(
     user = User(
         email=payload.email,
         full_name=payload.full_name,
-        hashed_password=hash_password(payload.password),
         role=payload.role,
         region=payload.region,
     )
@@ -60,7 +59,6 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Only admin or the user themselves can update
     if current_user.role != UserRole.admin and current_user.id != user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
     result = await db.execute(select(User).where(User.id == user_id))
@@ -68,8 +66,5 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     for field, value in payload.model_dump(exclude_none=True).items():
-        if field == "password":
-            user.hashed_password = hash_password(value)
-        else:
-            setattr(user, field, value)
+        setattr(user, field, value)
     return user
