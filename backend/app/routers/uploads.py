@@ -10,10 +10,9 @@ from typing import Optional
 from app.config import settings as cfg
 from app.database import get_db
 from app.models.attachment import Attachment
-import jwt
-from app.config import settings as cfg
 from app.models.user import User
 from app.services.auth_service import get_current_user
+from app.services.azure_token import validate_azure_token
 import app.services.storage as storage_svc
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
@@ -105,14 +104,16 @@ def _extract_token(request: Request) -> str:
 
 
 async def _auth_from_request(request: Request, db: AsyncSession) -> User:
-    """Accept CRM JWT from Authorization header OR ?token= query param (needed for <img src>)."""
+    """Accept Azure AD token from Authorization header OR ?token= query param (needed for <img src>)."""
     token = _extract_token(request)
     try:
-        payload = jwt.decode(token, cfg.SECRET_KEY, algorithms=[cfg.ALGORITHM])
-        user_id = int(payload.get("sub"))
-    except (jwt.PyJWTError, TypeError, ValueError):
+        claims = validate_azure_token(token)
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
-    result = await db.execute(select(User).where(User.id == user_id))
+    oid = claims.get("oid")
+    if not oid:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.entra_object_id == oid))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found")
@@ -120,11 +121,11 @@ async def _auth_from_request(request: Request, db: AsyncSession) -> User:
 
 
 def _verify_token(request: Request) -> None:
-    """Validate CRM JWT signature + expiry — no DB lookup."""
+    """Validate Azure AD token signature + expiry — no DB lookup."""
     token = _extract_token(request)
     try:
-        jwt.decode(token, cfg.SECRET_KEY, algorithms=[cfg.ALGORITHM])
-    except (jwt.PyJWTError, TypeError, ValueError):
+        validate_azure_token(token)
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 

@@ -12,19 +12,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://crm:crm@localhost:5432/crm"
     DATABASE_SYNC_URL: str = "postgresql://crm:crm@localhost:5432/crm"
 
-    # Security – signs CRM-issued JWTs (not Azure tokens)
-    SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
-
     # Azure AD SSO – role claim values (must match Azure App Role "Value" field)
     AZURE_ROLE_ADMIN: str = "CRM.Admin"
     AZURE_ROLE_SALES_MANAGER: str = "CRM.SalesManager"
     AZURE_ROLE_ACCOUNT_MANAGER: str = "CRM.AccountManager"
     AZURE_ROLE_SALES_REP: str = "CRM.SalesRep"
-
-    # OAuth2 callback URL – must be a BACKEND URL registered as "Web" in Azure
-    AZURE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
 
     # Frontend URL (used for OAuth redirects after MS Graph callback)
     FRONTEND_URL: str = "http://localhost:5173"

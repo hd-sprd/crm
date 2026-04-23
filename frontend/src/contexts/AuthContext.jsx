@@ -1,26 +1,32 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
+import { useMsal, useIsAuthenticated } from '@azure/msal-react'
+import { InteractionRequiredAuthError, InteractionStatus } from '@azure/msal-browser'
+import { TOKEN_REQUEST } from '../config/msal'
 import { authApi } from '../api/auth'
 import { BACKEND_URL } from '../api/client'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('crm_user') || 'null') } catch { return null }
-  })
-  const [token, setToken] = useState(() => localStorage.getItem('crm_token') || null)
+  const { instance, accounts, inProgress } = useMsal()
+  const msalAuthenticated = useIsAuthenticated()
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
   const warmupTimer = useRef(null)
 
-  // Re-validate token on mount (ensures stored token is still valid)
   useEffect(() => {
-    if (!token) return
-    authApi.me().then(setUser).catch(() => {
-      localStorage.removeItem('crm_token')
-      localStorage.removeItem('crm_user')
-      setToken(null)
+    if (inProgress !== InteractionStatus.None) return
+    if (msalAuthenticated && accounts[0]) {
+      instance.setActiveAccount(accounts[0])
+      authApi.me()
+        .then(setUser)
+        .catch(() => setUser(null))
+        .finally(() => setLoading(false))
+    } else {
       setUser(null)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+      setLoading(false)
+    }
+  }, [msalAuthenticated, accounts, instance, inProgress])
 
   // Keep Vercel serverless warm — only while authenticated, pauses when tab hidden
   useEffect(() => {
@@ -34,24 +40,28 @@ export function AuthProvider({ children }) {
     return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [user])
 
-  const storeSession = useCallback((newToken, newUser) => {
-    setToken(newToken)
-    setUser(newUser)
-    localStorage.setItem('crm_token', newToken)
-    localStorage.setItem('crm_user', JSON.stringify(newUser))
-  }, [])
+  const login = useCallback(async () => {
+    try {
+      await instance.loginRedirect(TOKEN_REQUEST)
+    } catch (e) {
+      if (e?.errorCode === 'interaction_in_progress') {
+        Object.keys(sessionStorage)
+          .filter(k => k.endsWith('.interaction.status'))
+          .forEach(k => sessionStorage.removeItem(k))
+        await instance.loginRedirect(TOKEN_REQUEST)
+      } else {
+        throw e
+      }
+    }
+  }, [instance])
 
   const logout = useCallback(() => {
-    setToken(null)
     setUser(null)
-    localStorage.removeItem('crm_token')
-    localStorage.removeItem('crm_user')
-  }, [])
-
-  const isAuthenticated = Boolean(token && user)
+    instance.logoutRedirect()
+  }, [instance])
 
   return (
-    <AuthContext.Provider value={{ user, token, storeSession, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: msalAuthenticated && !!user }}>
       {children}
     </AuthContext.Provider>
   )

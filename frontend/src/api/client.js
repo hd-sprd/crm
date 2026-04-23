@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { InteractionRequiredAuthError } from '@azure/msal-browser'
+import { msalInstance, TOKEN_REQUEST } from '../config/msal'
 
 export const BACKEND_URL = (import.meta.env.VITE_API_URL || '').replace(/\/api\/v1\/?$/, '')
 
@@ -7,10 +9,19 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach CRM JWT to every request
-client.interceptors.request.use(config => {
-  const token = localStorage.getItem('crm_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+// Attach Azure AD ID token to every request
+client.interceptors.request.use(async (config) => {
+  const account = msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0]
+  if (account) {
+    try {
+      const resp = await msalInstance.acquireTokenSilent({ ...TOKEN_REQUEST, account })
+      config.headers.Authorization = `Bearer ${resp.idToken}`
+    } catch (e) {
+      if (e instanceof InteractionRequiredAuthError) {
+        msalInstance.acquireTokenRedirect({ ...TOKEN_REQUEST, account }).catch(() => {})
+      }
+    }
+  }
   return config
 })
 
@@ -31,13 +42,11 @@ client.interceptors.response.use(
   }
 )
 
-// Handle 401 globally – redirect to login
+// Handle 401 globally – trigger re-login
 client.interceptors.response.use(
   res => res,
-  error => {
+  (error) => {
     if (error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
-      localStorage.removeItem('crm_token')
-      localStorage.removeItem('crm_user')
       window.location.href = '/login'
     }
     return Promise.reject(error)
